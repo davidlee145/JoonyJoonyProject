@@ -2205,53 +2205,389 @@
         }
 
         drawSkyBackground() {
-          this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            GAME_WIDTH,
-            GAME_HEIGHT,
-            0xaee3ff,
-          );
+          this.backgroundScrollers = [];
 
-          // 구름
-          const makeCloud = (x, y, s = 1) => {
-            this.add.circle(x, y, 26 * s, 0xffffff, 0.9);
-            this.add.circle(x + 26 * s, y - 6 * s, 22 * s, 0xffffff, 0.9);
-            this.add.circle(x + 50 * s, y, 20 * s, 0xffffff, 0.9);
+          const addScroller = (sprite, speed) => {
+            this.backgroundScrollers.push({ sprite, speed });
+            return sprite;
           };
 
-          makeCloud(80, 110, 1.1);
-          makeCloud(470, 160, 1.2);
-          makeCloud(290, 250, 0.9);
+          const makeSkyGradientTexture = () => {
+            const key = "deliverySkyPremiumTex";
+            if (!this.textures.exists(key)) {
+              const texture = this.textures.createCanvas(
+                key,
+                GAME_WIDTH,
+                GAME_HEIGHT,
+              );
+              const ctx = texture.getContext();
 
-          // 멀리 있는 도시
-          for (let i = 0; i < 8; i++) {
-            const x = 40 + i * 95;
-            const h = 140 + (i % 3) * 50;
-            this.add.rectangle(x, GAME_HEIGHT - 150, 60, h, 0xa5b8c8);
-          }
+              const sky = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+              sky.addColorStop(0, "#93d8ff");
+              sky.addColorStop(0.34, "#bfeeff");
+              sky.addColorStop(0.66, "#ffe6b3");
+              sky.addColorStop(1, "#f2b66f");
+              ctx.fillStyle = sky;
+              ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+              const glow = ctx.createRadialGradient(560, 210, 12, 560, 210, 260);
+              glow.addColorStop(0, "rgba(255, 255, 255, 0.88)");
+              glow.addColorStop(0.34, "rgba(255, 235, 164, 0.42)");
+              glow.addColorStop(1, "rgba(255, 214, 125, 0)");
+              ctx.fillStyle = glow;
+              ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+              const haze = ctx.createLinearGradient(0, 520, 0, 920);
+              haze.addColorStop(0, "rgba(255, 255, 255, 0)");
+              haze.addColorStop(0.56, "rgba(255, 255, 255, 0.28)");
+              haze.addColorStop(1, "rgba(255, 250, 230, 0.06)");
+              ctx.fillStyle = haze;
+              ctx.fillRect(0, 520, GAME_WIDTH, 420);
+
+              texture.refresh();
+            }
+            return key;
+          };
+
+          const makeSoftCloudTexture = () => {
+            const key = "deliverySoftCloudTex";
+            if (!this.textures.exists(key)) {
+              const g = this.make.graphics({ x: 0, y: 0, add: false });
+              g.fillStyle(0xffffff, 0.92);
+              g.fillEllipse(64, 52, 92, 46);
+              g.fillEllipse(125, 42, 86, 54);
+              g.fillEllipse(190, 54, 112, 46);
+              g.fillEllipse(242, 60, 76, 34);
+              g.fillStyle(0xd9f2ff, 0.32);
+              g.fillEllipse(122, 66, 198, 24);
+              g.fillEllipse(212, 72, 120, 18);
+              g.generateTexture(key, 300, 110);
+              g.destroy();
+            }
+            return key;
+          };
+
+          const makeMountainTexture = () => {
+            const key = "deliveryMountainTileTex";
+            if (!this.textures.exists(key)) {
+              const g = this.make.graphics({ x: 0, y: 0, add: false });
+              g.fillStyle(0x9fc5cf, 0.52);
+              g.beginPath();
+              g.moveTo(0, 220);
+              g.lineTo(120, 82);
+              g.lineTo(250, 220);
+              g.lineTo(360, 112);
+              g.lineTo(520, 220);
+              g.lineTo(680, 92);
+              g.lineTo(840, 220);
+              g.lineTo(960, 128);
+              g.lineTo(960, 260);
+              g.lineTo(0, 260);
+              g.closePath();
+              g.fillPath();
+
+              g.fillStyle(0xe7f9ff, 0.38);
+              g.fillTriangle(96, 110, 120, 82, 154, 118);
+              g.fillTriangle(646, 120, 680, 92, 716, 126);
+              g.fillTriangle(932, 150, 960, 128, 960, 176);
+              g.generateTexture(key, 960, 260);
+              g.destroy();
+            }
+            return key;
+          };
+
+          const makeSkylineTexture = (key, palette, alpha = 1) => {
+            if (this.textures.exists(key)) return key;
+
+            const g = this.make.graphics({ x: 0, y: 0, add: false });
+            const width = 960;
+            const height = 340;
+            const buildings = [
+              [12, 160, 72, 170],
+              [96, 102, 86, 228],
+              [198, 138, 62, 192],
+              [276, 70, 94, 260],
+              [390, 124, 78, 206],
+              [486, 92, 108, 238],
+              [616, 150, 68, 180],
+              [700, 84, 96, 246],
+              [814, 118, 72, 212],
+              [900, 142, 74, 188],
+            ];
+
+            buildings.forEach(([x, y, w, h], i) => {
+              const color = palette[i % palette.length];
+              g.fillStyle(color, alpha);
+              g.fillRoundedRect(x, y, w, h, 10);
+              g.fillStyle(0xffffff, alpha * 0.26);
+              for (let yy = y + 22; yy < y + h - 24; yy += 32) {
+                for (let xx = x + 14; xx < x + w - 14; xx += 24) {
+                  if ((xx + yy + i * 7) % 5 !== 0) {
+                    g.fillRoundedRect(xx, yy, 12, 14, 3);
+                  }
+                }
+              }
+              g.fillStyle(0x455a64, alpha * 0.28);
+              g.fillRect(x + w * 0.2, y - 8, w * 0.34, 8);
+            });
+
+            g.fillStyle(0xffffff, 0.16);
+            g.fillRect(0, 296, width, 10);
+            g.generateTexture(key, width, height);
+            g.destroy();
+            return key;
+          };
+
+          const makeStorefrontTexture = () => {
+            const key = "deliveryStorefrontTileTex";
+            if (this.textures.exists(key)) return key;
+
+            const g = this.make.graphics({ x: 0, y: 0, add: false });
+            const shops = [
+              { x: 0, w: 180, c: 0xf7c8a0, awning: 0xd81f2a, sign: "FAST" },
+              { x: 180, w: 170, c: 0xb9d9c4, awning: 0x2f80ed, sign: "MART" },
+              { x: 350, w: 210, c: 0xf5d58b, awning: 0xf57c00, sign: "CAFE" },
+              { x: 560, w: 170, c: 0xc8d6e5, awning: 0x0b8f4d, sign: "PARK" },
+              { x: 730, w: 230, c: 0xe7c6ff, awning: 0x8e44ad, sign: "HOME" },
+            ];
+
+            shops.forEach((shop, i) => {
+              g.fillStyle(shop.c, 0.9);
+              g.fillRoundedRect(shop.x + 8, 54, shop.w - 16, 190, 12);
+              g.fillStyle(0xffffff, 0.36);
+              g.fillRoundedRect(shop.x + 28, 76, shop.w - 56, 42, 8);
+              g.fillStyle(shop.awning, 0.86);
+              g.fillRoundedRect(shop.x + 16, 124, shop.w - 32, 34, 8);
+              g.fillStyle(0xffffff, 0.88);
+              for (let sx = shop.x + 26; sx < shop.x + shop.w - 28; sx += 36) {
+                g.fillTriangle(sx, 158, sx + 18, 158, sx + 9, 178);
+              }
+              g.fillStyle(0x5d4037, 0.38);
+              g.fillRoundedRect(shop.x + 34, 178, 42, 66, 6);
+              g.fillStyle(0xe3f2fd, 0.68);
+              g.fillRoundedRect(shop.x + shop.w - 88, 178, 52, 44, 6);
+              g.fillStyle(0xffffff, 0.56);
+              g.fillRect(shop.x + shop.w - 82, 186, 40, 4);
+
+              // 작은 간판 느낌은 텍스처에 직접 글자를 넣지 않고 패널과 줄만 그려
+              // 배경이 과하게 읽히지 않도록 한다.
+              g.fillStyle(0x3e2723, 0.2 + i * 0.018);
+              g.fillRoundedRect(shop.x + 42, 88, shop.w - 84, 12, 6);
+            });
+
+            // 가로수와 가로등
+            for (let x = 62; x < 960; x += 160) {
+              g.fillStyle(0x6d4c41, 0.62);
+              g.fillRoundedRect(x, 190, 12, 60, 4);
+              g.fillStyle(0x4caf50, 0.68);
+              g.fillCircle(x + 6, 178, 26);
+              g.fillCircle(x - 12, 188, 18);
+              g.fillCircle(x + 24, 190, 18);
+            }
+            for (let x = 130; x < 960; x += 240) {
+              g.lineStyle(5, 0x4d6470, 0.48);
+              g.beginPath();
+              g.moveTo(x, 246);
+              g.lineTo(x, 152);
+              g.lineTo(x + 34, 142);
+              g.strokePath();
+              g.fillStyle(0xfff3b0, 0.62);
+              g.fillCircle(x + 40, 142, 10);
+            }
+
+            g.generateTexture(key, 960, 260);
+            g.destroy();
+            return key;
+          };
+
+          const makeSidewalkTexture = () => {
+            const key = "deliverySidewalkTileTex";
+            if (this.textures.exists(key)) return key;
+
+            const g = this.make.graphics({ x: 0, y: 0, add: false });
+            g.fillStyle(0xd8c9b4, 1);
+            g.fillRect(0, 0, 960, 120);
+            g.fillStyle(0xf5ead9, 0.82);
+            g.fillRect(0, 0, 960, 18);
+            g.lineStyle(2, 0xb8a591, 0.42);
+            for (let x = -40; x < 1000; x += 96) {
+              g.beginPath();
+              g.moveTo(x, 18);
+              g.lineTo(x + 48, 120);
+              g.strokePath();
+            }
+            g.lineStyle(2, 0xb8a591, 0.32);
+            for (let y = 44; y < 120; y += 34) {
+              g.beginPath();
+              g.moveTo(0, y);
+              g.lineTo(960, y);
+              g.strokePath();
+            }
+            g.generateTexture(key, 960, 120);
+            g.destroy();
+            return key;
+          };
+
+          const makeRoadTexture = () => {
+            const key = "deliveryRoadPremiumTex";
+            if (this.textures.exists(key)) return key;
+
+            const g = this.make.graphics({ x: 0, y: 0, add: false });
+            g.fillStyle(0x4f5b62, 1);
+            g.fillRect(0, 0, 960, 260);
+            g.fillStyle(0x64727b, 0.65);
+            g.fillRect(0, 0, 960, 32);
+            g.fillStyle(0x37474f, 0.58);
+            g.fillRect(0, 212, 960, 48);
+
+            g.lineStyle(2, 0x78909c, 0.2);
+            for (let y = 58; y < 240; y += 38) {
+              g.beginPath();
+              g.moveTo(0, y);
+              g.lineTo(960, y + 18);
+              g.strokePath();
+            }
+
+            g.fillStyle(0xffffff, 0.46);
+            for (let x = 24; x < 960; x += 132) {
+              g.fillRoundedRect(x, 88, 76, 10, 5);
+            }
+            g.fillStyle(0xffe082, 0.72);
+            for (let x = 0; x < 960; x += 122) {
+              g.fillRoundedRect(x + 18, 152, 64, 9, 5);
+            }
+            g.generateTexture(key, 960, 260);
+            g.destroy();
+            return key;
+          };
+
+          this.add
+            .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, makeSkyGradientTexture())
+            .setDepth(-30);
+
+          // 햇빛과 얇은 대기감: 장애물과 라이더는 또렷하게 보이도록 낮은 알파만 사용.
+          this.add.circle(560, 210, 42, 0xfff7c2, 0.78).setDepth(-29);
+          this.add.circle(560, 210, 72, 0xfff0a5, 0.18).setDepth(-29);
+
+          const cloudKey = makeSoftCloudTexture();
+          addScroller(
+            this.add
+              .tileSprite(GAME_WIDTH / 2, 130, GAME_WIDTH, 120, cloudKey)
+              .setAlpha(0.72)
+              .setDepth(-28),
+            0.1,
+          );
+          addScroller(
+            this.add
+              .tileSprite(GAME_WIDTH / 2, 245, GAME_WIDTH, 120, cloudKey)
+              .setAlpha(0.5)
+              .setScale(1.18, 1)
+              .setDepth(-27),
+            0.18,
+          );
+
+          addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                610,
+                GAME_WIDTH,
+                260,
+                makeMountainTexture(),
+              )
+              .setAlpha(0.72)
+              .setDepth(-26),
+            0.16,
+          );
+
+          addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                710,
+                GAME_WIDTH,
+                340,
+                makeSkylineTexture(
+                  "deliveryFarCityTileTex",
+                  [0x8db5c4, 0x9bc2cf, 0x86aebe, 0xa7cbd2],
+                  0.72,
+                ),
+              )
+              .setAlpha(0.62)
+              .setDepth(-24),
+            0.32,
+          );
+
+          addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                830,
+                GAME_WIDTH,
+                340,
+                makeSkylineTexture(
+                  "deliveryNearCityTileTex",
+                  [0x7f9aaa, 0x8da8b5, 0x7891a0, 0x93aeb8],
+                  0.86,
+                ),
+              )
+              .setAlpha(0.5)
+              .setDepth(-22),
+            0.55,
+          );
+
+          this.add
+            .rectangle(GAME_WIDTH / 2, 815, GAME_WIDTH, 280, 0xffffff, 0.18)
+            .setDepth(-21);
+
+          addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                925,
+                GAME_WIDTH,
+                260,
+                makeStorefrontTexture(),
+              )
+              .setAlpha(0.72)
+              .setDepth(-18),
+            1.05,
+          );
+
+          addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                1038,
+                GAME_WIDTH,
+                120,
+                makeSidewalkTexture(),
+              )
+              .setDepth(-14),
+            2.4,
+          );
 
           this.ground = this.add
-            .rectangle(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT - 48,
-              GAME_WIDTH,
-              96,
-              0x91c36b,
-            )
-            .setDepth(this.depths.background);
+            .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 92, GAME_WIDTH, 184, 0x455a64)
+            .setDepth(-13);
 
-          this.groundStripe = this.add
-            .tileSprite(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT - 30,
-              GAME_WIDTH,
-              20,
-              "redButton",
-            )
-            .setTint(0x6da544)
-            .setDepth(this.depths.background);
-          this.groundStripe.setAlpha(0.18);
+          this.groundStripe = addScroller(
+            this.add
+              .tileSprite(
+                GAME_WIDTH / 2,
+                GAME_HEIGHT - 84,
+                GAME_WIDTH,
+                260,
+                makeRoadTexture(),
+              )
+              .setDepth(-12),
+            6.8,
+          );
+
+          // 아래쪽 은은한 그라데이션은 버튼 영역과 도로를 분리해 조작감을 살린다.
+          this.add
+            .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 8, GAME_WIDTH, 46, 0x263238, 0.24)
+            .setDepth(-11);
         }
 
         drawFlappyHUD() {
@@ -2715,7 +3051,11 @@
           }
 
           if (this.gameStarted) {
-            this.groundStripe.tilePositionX += 7;
+            (this.backgroundScrollers || []).forEach(({ sprite, speed }) => {
+              if (sprite && sprite.tilePositionX !== undefined) {
+                sprite.tilePositionX += speed;
+              }
+            });
           }
 
           if (this.rider.body.velocity.y > 0) {
