@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>주니주니 테트리스 블록 배틀</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #2a458f 0%, #0d163a 52%, #050816 100%);
+      font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      touch-action: none;
+    }
+    body { display: grid; place-items: center; }
+    #wrap {
+      width: min(100vw, calc(100dvh * 0.5625));
+      height: min(100dvh, calc(100vw * 1.7777777778));
+      display: grid;
+      place-items: center;
+    }
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      border-radius: 20px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.24);
+      background: #071126;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap"><canvas id="game" width="720" height="1280" tabindex="0"></canvas></div>
+<script>
+(() => {
+  'use strict';
+
+  const W = 720;
+  const H = 1280;
+  const TAU = Math.PI * 2;
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  canvas.tabIndex = 0;
+  const focusGame = () => { try { window.focus(); canvas.focus({ preventScroll: true }); } catch (e) {} };
+  setTimeout(focusGame, 80);
+  window.addEventListener('pointerdown', focusGame, { passive: true });
+
+  const COLORS = {
+    bgTop: '#152b63',
+    bgMid: '#0b1740',
+    bgBottom: '#050816',
+    panel: 'rgba(255,255,255,0.10)',
+    panel2: 'rgba(255,255,255,0.06)',
+    stroke: 'rgba(255,255,255,0.18)',
+    text: '#f3f7ff',
+    muted: '#b8c9ff',
+    gold: '#ffd65a',
+    danger: '#ff657e',
+    ok: '#66e28e',
+    cyan: '#61d6ff'
+  };
+
+  const PIECE_COLORS = {
+    I: '#54d9ff',
+    O: '#ffd85d',
+    T: '#c77dff',
+    S: '#5df287',
+    Z: '#ff667a',
+    J: '#5f8eff',
+    L: '#ffa94a'
+  };
+
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]]
+  };
+
+  const LAYOUT = {
+    boardX: 54,
+    boardY: 190,
+    cell: 36,
+    cols: 10,
+    rows: 20,
+    hudX: 440,
+    hudY: 190,
+    controlY: 1112
+  };
+
+  const STATE = {
+    TITLE: 'title',
+    PLAYING: 'playing',
+    PAUSED: 'paused',
+    GAMEOVER: 'gameover'
+  };
+
+  const AudioFX = (() => {
+    let audioContext = null;
+    function ctxx() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      if (!audioContext) audioContext = new AC();
+      if (audioContext.state === 'suspended') audioContext.resume();
+      return audioContext;
+    }
+    function tone(freq, dur, type = 'triangle', vol = 0.04, delay = 0, slide = 0) {
+      const ac = ctxx();
+      if (!ac) return;
+      const now = ac.currentTime + delay;
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), now + dur);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.04);
+    }
+    return {
+      unlock: ctxx,
+      move: () => tone(320, 0.045, 'triangle', 0.025),
+      rotate: () => tone(520, 0.06, 'square', 0.022, 0, 160),
+      drop: () => tone(190, 0.08, 'sawtooth', 0.025, 0, -70),
+      hold: () => { tone(420, 0.06, 'triangle', 0.03); tone(690, 0.08, 'triangle', 0.025, 0.05); },
+      lock: () => tone(140, 0.09, 'square', 0.025),
+      clear: (n) => { for (let i = 0; i < n + 2; i++) tone(420 + i * 110, 0.09, 'triangle', 0.032, i * 0.045); },
+      level: () => { tone(440, 0.09, 'sine', 0.035); tone(660, 0.12, 'sine', 0.035, 0.09); tone(990, 0.18, 'sine', 0.04, 0.18); },
+      over: () => { tone(260, 0.18, 'sawtooth', 0.04); tone(180, 0.26, 'sawtooth', 0.035, 0.14); },
+      start: () => { tone(523, 0.08, 'triangle', 0.034); tone(659, 0.1, 'triangle', 0.034, 0.08); tone(784, 0.12, 'triangle', 0.038, 0.17); }
+    };
+  })();
+
+  function roundRect(c, x, y, w, h, r, fill = true, stroke = false) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+    if (fill) c.fill();
+    if (stroke) c.stroke();
+  }
+
+  function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+  function rand(min, max) { return min + Math.random() * (max - min); }
+  function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  class Particle {
+    constructor(x, y, color, power = 1) {
+      const a = rand(0, TAU);
+      const s = rand(60, 230) * power;
+      this.x = x;
+      this.y = y;
+      this.vx = Math.cos(a) * s;
+      this.vy = Math.sin(a) * s - rand(0, 80);
+      this.life = rand(0.38, 0.9);
+      this.maxLife = this.life;
+      this.size = rand(3, 8);
+      this.color = color;
+      this.spin = rand(-4, 4);
+      this.rot = rand(0, TAU);
+    }
+    update(dt) {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.vy += 260 * dt;
+      this.vx *= Math.pow(0.9, dt * 8);
+      this.life -= dt;
+      this.rot += this.spin * dt;
+    }
+    draw(c) {
+      const a = clamp(this.life / this.maxLife, 0, 1);
+      c.save();
+      c.globalAlpha = a;
+      c.translate(this.x, this.y);
+      c.rotate(this.rot);
+      c.fillStyle = this.color;
+      roundRect(c, -this.size / 2, -this.size / 2, this.size, this.size, 2, true, false);
+      c.restore();
+    }
+  }
+
+  class TetrisGame {
+    constructor() {
+      this.state = STATE.TITLE;
+      this.board = this.createBoard();
+      this.bag = [];
+      this.nextQueue = [];
+      this.current = null;
+      this.holdPiece = null;
+      this.canHold = true;
+      this.score = 0;
+      this.lines = 0;
+      this.level = 1;
+      this.combo = -1;
+      this.best = Number(localStorage.getItem('joonyjoony_tetris_best') || 0);
+      this.dropTimer = 0;
+      this.lockTimer = 0;
+      this.lockDelay = 0.42;
+      this.elapsed = 0;
+      this.flashRows = [];
+      this.flashTime = 0;
+      this.shake = 0;
+      this.particles = [];
+      this.keys = new Set();
+      this.autoRepeat = { left: 0, right: 0, down: 0 };
+      this.touchButtons = [];
+      this.message = '테트리스 블록 배틀';
+      this.messageTimer = 0;
+      this.stars = Array.from({ length: 90 }, () => ({ x: rand(0, W), y: rand(0, H), r: rand(0.5, 2.2), s: rand(15, 65), a: rand(0.22, 0.9) }));
+      this.initEvents();
+      this.preparePreviewQueue();
+    }
+
+    createBoard() {
+      return Array.from({ length: LAYOUT.rows }, () => Array(LAYOUT.cols).fill(null));
+    }
+
+    preparePreviewQueue() {
+      while (this.nextQueue.length < 5) this.nextQueue.push(this.generatePiece());
+    }
+
+    refillBag() {
+      this.bag = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+      for (let i = this.bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.bag[i], this.bag[j]] = [this.bag[j], this.bag[i]];
+      }
+    }
+
+    generatePiece() {
+      if (!this.bag.length) this.refillBag();
+      const type = this.bag.pop();
+      const matrix = SHAPES[type].map(row => row.slice());
+      return { type, matrix, x: 3, y: -1, rot: 0 };
+    }
+
+    clonePiece(piece) {
+      return { type: piece.type, matrix: piece.matrix.map(row => row.slice()), x: piece.x, y: piece.y, rot: piece.rot || 0 };
+    }
+
+    start() {
+      AudioFX.unlock();
+      AudioFX.start();
+      this.state = STATE.PLAYING;
+      this.board = this.createBoard();
+      this.bag = [];
+      this.nextQueue = [];
+      this.holdPiece = null;
+      this.current = null;
+      this.canHold = true;
+      this.score = 0;
+      this.lines = 0;
+      this.level = 1;
+      this.combo = -1;
+      this.dropTimer = 0;
+      this.lockTimer = 0;
+      this.elapsed = 0;
+      this.flashRows = [];
+      this.flashTime = 0;
+      this.shake = 0;
+      this.particles = [];
+      this.preparePreviewQueue();
+      this.spawnPiece();
+      this.showMessage('시작! 라인을 지워 점수를 올리세요', 1.4);
+    }
+
+    spawnPiece() {
+      this.preparePreviewQueue();
+      this.current = this.nextQueue.shift();
+      this.current.x = Math.floor(LAYOUT.cols / 2) - Math.ceil(this.current.matrix[0].length / 2);
+      this.current.y = -1;
+      this.current.rot = 0;
+      this.preparePreviewQueue();
+      this.canHold = true;
+      if (this.collides(this.current.matrix, this.current.x, this.current.y + 1)) this.gameOver();
+    }
+
+    gameOver() {
+      this.state = STATE.GAMEOVER;
+      AudioFX.over();
+      this.showMessage('게임 오버!', 3);
+      if (this.score > this.best) {
+        this.best = this.score;
+        localStorage.setItem('joonyjoony_tetris_best', String(this.best));
+      }
+    }
+
+    togglePause() {
+      if (this.state === STATE.PLAYING) {
+        this.state = STATE.PAUSED;
+        this.showMessage('일시정지', 999);
+      } else if (this.state === STATE.PAUSED) {
+        this.state = STATE.PLAYING;
+        this.showMessage('다시 시작!', 0.9);
+      }
+    }
+
+    showMessage(msg, t = 1) {
+      this.message = msg;
+      this.messageTimer = t;
+    }
+
+    rotateMatrix(matrix) {
+      const h = matrix.length;
+      const w = matrix[0].length;
+      const out = Array.from({ length: w }, () => Array(h).fill(0));
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out[x][h - 1 - y] = matrix[y][x];
+      return out;
+    }
+
+    collides(matrix, offsetX, offsetY) {
+      for (let y = 0; y < matrix.length; y++) {
+        for (let x = 0; x < matrix[y].length; x++) {
+          if (!matrix[y][x]) continue;
+          const bx = offsetX + x;
+          const by = offsetY + y;
+          if (bx < 0 || bx >= LAYOUT.cols || by >= LAYOUT.rows) return true;
+          if (by >= 0 && this.board[by][bx]) return true;
+        }
+      }
+      return false;
+    }
+
+    move(dir, silent = false) {
+      if (this.state !== STATE.PLAYING || !this.current) return false;
+      const nx = this.current.x + dir;
+      if (!this.collides(this.current.matrix, nx, this.current.y)) {
+        this.current.x = nx;
+        this.lockTimer = 0;
+        if (!silent) AudioFX.move();
+        return true;
+      }
+      return false;
+    }
+
+    rotateCurrent() {
+      if (this.state !== STATE.PLAYING || !this.current) return;
+      const rotated = this.rotateMatrix(this.current.matrix);
+      const kicks = [0, -1, 1, -2, 2];
+      for (const kick of kicks) {
+        if (!this.collides(rotated, this.current.x + kick, this.current.y)) {
+          this.current.matrix = rotated;
+          this.current.x += kick;
+          this.current.rot = (this.current.rot + 1) % 4;
+          this.lockTimer = 0;
+          AudioFX.rotate();
+          return;
+        }
+      }
+    }
+
+    softDrop(manual = true) {
+      if (this.state !== STATE.PLAYING || !this.current) return false;
+      if (!this.collides(this.current.matrix, this.current.x, this.current.y + 1)) {
+        this.current.y += 1;
+        if (manual) this.score += 1;
+        this.dropTimer = 0;
+        return true;
+      }
+      if (manual) this.lockTimer = this.lockDelay;
+      return false;
+    }
+
+    hardDrop() {
+      if (this.state !== STATE.PLAYING || !this.current) return;
+      let count = 0;
+      while (!this.collides(this.current.matrix, this.current.x, this.current.y + 1)) {
+        this.current.y += 1;
+        count += 1;
+      }
+      this.score += count * 2;
+      AudioFX.drop();
+      this.lockPiece();
+    }
+
+    hold() {
+      if (this.state !== STATE.PLAYING || !this.current || !this.canHold) return;
+      AudioFX.hold();
+      const currentType = this.current.type;
+      if (!this.holdPiece) {
+        this.holdPiece = this.generateHeldPiece(currentType);
+        this.spawnPiece();
+      } else {
+        const temp = this.holdPiece.type;
+        this.holdPiece = this.generateHeldPiece(currentType);
+        this.current = this.generateHeldPiece(temp);
+        this.current.x = Math.floor(LAYOUT.cols / 2) - Math.ceil(this.current.matrix[0].length / 2);
+        this.current.y = -1;
+      }
+      this.canHold = false;
+      this.showMessage('홀드!', 0.75);
+    }
+
+    generateHeldPiece(type) {
+      return { type, matrix: SHAPES[type].map(row => row.slice()), x: 3, y: -1, rot: 0 };
+    }
+
+    lockPiece() {
+      if (!this.current) return;
+      const p = this.current;
+      let lost = false;
+      for (let y = 0; y < p.matrix.length; y++) {
+        for (let x = 0; x < p.matrix[y].length; x++) {
+          if (!p.matrix[y][x]) continue;
+          const by = p.y + y;
+          const bx = p.x + x;
+          if (by < 0) lost = true;
+          else this.board[by][bx] = p.type;
+          this.emitBlockParticles(bx, by, PIECE_COLORS[p.type], 4, 0.55);
+        }
+      }
+      AudioFX.lock();
+      if (lost) return this.gameOver();
+      this.clearFullLines();
+      this.spawnPiece();
+      this.lockTimer = 0;
+    }
+
+    clearFullLines() {
+      const rows = [];
+      for (let y = LAYOUT.rows - 1; y >= 0; y--) {
+        if (this.board[y].every(Boolean)) rows.push(y);
+      }
+      if (!rows.length) {
+        this.combo = -1;
+        return;
+      }
+      rows.forEach(row => {
+        for (let x = 0; x < LAYOUT.cols; x++) this.emitBlockParticles(x, row, PIECE_COLORS[this.board[row][x]] || '#fff', 12, 1.1);
+      });
+      rows.sort((a, b) => a - b).forEach(row => {
+        this.board.splice(row, 1);
+        this.board.unshift(Array(LAYOUT.cols).fill(null));
+      });
+      const count = rows.length;
+      this.lines += count;
+      this.combo += 1;
+      const base = [0, 100, 300, 500, 800][count] || 1200;
+      this.score += base * this.level + Math.max(0, this.combo) * 50;
+      const oldLevel = this.level;
+      this.level = 1 + Math.floor(this.lines / 8);
+      this.flashRows = rows;
+      this.flashTime = 0.26;
+      this.shake = Math.min(12, 4 + count * 2);
+      AudioFX.clear(count);
+      if (count === 4) this.showMessage('테트리스! + 보너스', 1.4);
+      else this.showMessage(`${count}줄 클리어!`, 1.0);
+      if (this.level > oldLevel) {
+        AudioFX.level();
+        this.showMessage(`레벨 ${this.level}! 속도 상승`, 1.5);
+      }
+    }
+
+    emitBlockParticles(bx, by, color, amount, power) {
+      if (by < 0) return;
+      const x = LAYOUT.boardX + bx * LAYOUT.cell + LAYOUT.cell / 2;
+      const y = LAYOUT.boardY + by * LAYOUT.cell + LAYOUT.cell / 2;
+      for (let i = 0; i < amount; i++) this.particles.push(new Particle(x, y, color, power));
+    }
+
+    getDropInterval() {
+      return Math.max(0.085, 0.78 - (this.level - 1) * 0.055);
+    }
+
+    getGhostY() {
+      if (!this.current) return 0;
+      let y = this.current.y;
+      while (!this.collides(this.current.matrix, this.current.x, y + 1)) y++;
+      return y;
+    }
+
+    update(dt) {
+      this.stars.forEach(s => {
+        s.y += s.s * dt;
+        if (s.y > H) { s.y = -4; s.x = rand(0, W); }
+      });
+      this.particles.forEach(p => p.update(dt));
+      this.particles = this.particles.filter(p => p.life > 0);
+      this.shake = Math.max(0, this.shake - dt * 28);
+      if (this.messageTimer < 900) this.messageTimer = Math.max(0, this.messageTimer - dt);
+      if (this.flashTime > 0) this.flashTime -= dt;
+
+      if (this.state !== STATE.PLAYING) return;
+      this.elapsed += dt;
+      this.handleHeldKeys(dt);
+      this.dropTimer += dt;
+      if (this.dropTimer >= this.getDropInterval()) {
+        this.dropTimer = 0;
+        if (!this.softDrop(false)) {
+          this.lockTimer += dt;
+          if (this.lockTimer >= this.lockDelay) this.lockPiece();
+        } else {
+          this.lockTimer = 0;
+        }
+      } else if (this.current && this.collides(this.current.matrix, this.current.x, this.current.y + 1)) {
+        this.lockTimer += dt;
+        if (this.lockTimer >= this.lockDelay) this.lockPiece();
+      } else {
+        this.lockTimer = 0;
+      }
+    }
+
+    handleHeldKeys(dt) {
+      const repeatAction = (name, fn, first = 0.16, next = 0.055) => {
+        if (!this.keys.has(name)) { this.autoRepeat[name] = 0; return; }
+        this.autoRepeat[name] += dt;
+        const threshold = this.autoRepeat[name] < first ? first : next;
+        if (this.autoRepeat[name] >= threshold) {
+          this.autoRepeat[name] = first;
+          fn();
+        }
+      };
+      repeatAction('left', () => this.move(-1, false));
+      repeatAction('right', () => this.move(1, false));
+      if (this.keys.has('down')) {
+        this.autoRepeat.down += dt;
+        if (this.autoRepeat.down >= 0.05) {
+          this.autoRepeat.down = 0;
+          this.softDrop(true);
+        }
+      } else this.autoRepeat.down = 0;
+    }
+
+    initEvents() {
+      window.addEventListener('keydown', e => {
+        AudioFX.unlock();
+        const key = e.key.toLowerCase();
+        if (e.key === 'ArrowLeft' || key === 'a') { this.keys.add('left'); if (!e.repeat) this.move(-1); }
+        else if (e.key === 'ArrowRight' || key === 'd') { this.keys.add('right'); if (!e.repeat) this.move(1); }
+        else if (e.key === 'ArrowDown' || key === 's') { this.keys.add('down'); if (!e.repeat) this.softDrop(true); }
+        else if (e.key === 'ArrowUp' || key === 'w' || key === 'x') { if (!e.repeat) this.rotateCurrent(); }
+        else if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.hardDrop(); }
+        else if (key === 'c' || e.key === 'Shift') { if (!e.repeat) this.hold(); }
+        else if (key === 'p' || e.key === 'Escape') { if (!e.repeat) this.togglePause(); }
+        else if (e.key === 'Enter') { if (!e.repeat && (this.state === STATE.TITLE || this.state === STATE.GAMEOVER)) this.start(); }
+      });
+      window.addEventListener('keyup', e => {
+        const key = e.key.toLowerCase();
+        if (e.key === 'ArrowLeft' || key === 'a') this.keys.delete('left');
+        if (e.key === 'ArrowRight' || key === 'd') this.keys.delete('right');
+        if (e.key === 'ArrowDown' || key === 's') this.keys.delete('down');
+      });
+      const pointer = (e, isDown) => {
+        e.preventDefault();
+        AudioFX.unlock();
+        const p = this.toCanvasPoint(e);
+        if (!p) return;
+        if (isDown) this.handleTouchButton(p.x, p.y);
+      };
+      canvas.addEventListener('pointerdown', e => pointer(e, true), { passive: false });
+      canvas.addEventListener('pointermove', e => e.preventDefault(), { passive: false });
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    toCanvasPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) / rect.width * W, y: (e.clientY - rect.top) / rect.height * H };
+    }
+
+    handleTouchButton(x, y) {
+      for (const btn of this.touchButtons) {
+        if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+          btn.action();
+          return;
+        }
+      }
+      if (this.state === STATE.TITLE || this.state === STATE.GAMEOVER) this.start();
+    }
+
+    drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, COLORS.bgTop);
+      grad.addColorStop(0.5, COLORS.bgMid);
+      grad.addColorStop(1, COLORS.bgBottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      this.stars.forEach(s => {
+        ctx.globalAlpha = s.a;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, TAU);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      const glow = ctx.createRadialGradient(W / 2, 80, 10, W / 2, 110, 420);
+      glow.addColorStop(0, 'rgba(96,216,255,0.22)');
+      glow.addColorStop(1, 'rgba(96,216,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    drawFrame() {
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      roundRect(ctx, 18, 18, W - 36, 124, 28, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, 18, 18, W - 36, 124, 28, false, true);
+      ctx.fillStyle = COLORS.text;
+      ctx.font = '900 42px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('테트리스 블록 배틀', 38, 70);
+      ctx.font = '700 20px Arial, sans-serif';
+      ctx.fillStyle = COLORS.muted;
+      ctx.fillText('오리지널 테트리스 감성: 홀드, 고스트, 콤보, 레벨업', 40, 107);
+    }
+
+    drawBoard() {
+      const bx = LAYOUT.boardX;
+      const by = LAYOUT.boardY;
+      const cw = LAYOUT.cell;
+      const bw = LAYOUT.cols * cw;
+      const bh = LAYOUT.rows * cw;
+      ctx.fillStyle = 'rgba(0,0,0,0.34)';
+      roundRect(ctx, bx - 14, by - 14, bw + 28, bh + 28, 26, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+      ctx.lineWidth = 3;
+      roundRect(ctx, bx - 14, by - 14, bw + 28, bh + 28, 26, false, true);
+      ctx.fillStyle = 'rgba(3,8,20,0.78)';
+      roundRect(ctx, bx, by, bw, bh, 12, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+      ctx.lineWidth = 1;
+      for (let x = 1; x < LAYOUT.cols; x++) {
+        ctx.beginPath(); ctx.moveTo(bx + x * cw, by); ctx.lineTo(bx + x * cw, by + bh); ctx.stroke();
+      }
+      for (let y = 1; y < LAYOUT.rows; y++) {
+        ctx.beginPath(); ctx.moveTo(bx, by + y * cw); ctx.lineTo(bx + bw, by + y * cw); ctx.stroke();
+      }
+      for (let y = 0; y < LAYOUT.rows; y++) {
+        for (let x = 0; x < LAYOUT.cols; x++) {
+          const type = this.board[y][x];
+          if (type) this.drawCell(x, y, PIECE_COLORS[type], 1, 0);
+        }
+      }
+      if (this.flashTime > 0) {
+        ctx.globalAlpha = clamp(this.flashTime / 0.26, 0, 1) * 0.58;
+        ctx.fillStyle = '#ffffff';
+        for (const y of this.flashRows) ctx.fillRect(bx, by + y * cw, bw, cw);
+        ctx.globalAlpha = 1;
+      }
+      if (this.current && this.state !== STATE.TITLE) {
+        const ghostY = this.getGhostY();
+        this.drawPiece(this.current, this.current.x, ghostY, 0.22, true);
+        this.drawPiece(this.current, this.current.x, this.current.y, 1, false);
+      }
+    }
+
+    drawCell(x, y, color, alpha = 1, ghost = false) {
+      if (y < 0) return;
+      const cw = LAYOUT.cell;
+      const px = LAYOUT.boardX + x * cw;
+      const py = LAYOUT.boardY + y * cw;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      if (ghost) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        roundRect(ctx, px + 4, py + 4, cw - 8, cw - 8, 9, false, true);
+        ctx.restore();
+        return;
+      }
+      const g = ctx.createLinearGradient(px, py, px, py + cw);
+      g.addColorStop(0, lighten(color, 0.22));
+      g.addColorStop(0.55, color);
+      g.addColorStop(1, darken(color, 0.22));
+      ctx.fillStyle = g;
+      roundRect(ctx, px + 2, py + 2, cw - 4, cw - 4, 9, true, false);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      roundRect(ctx, px + 6, py + 5, cw - 13, 8, 5, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, px + 2, py + 2, cw - 4, cw - 4, 9, false, true);
+      ctx.restore();
+    }
+
+    drawPiece(piece, x, y, alpha = 1, ghost = false) {
+      piece.matrix.forEach((row, ry) => row.forEach((v, rx) => {
+        if (v) this.drawCell(x + rx, y + ry, PIECE_COLORS[piece.type], alpha, ghost);
+      }));
+    }
+
+    drawMiniPiece(piece, x, y, scale = 24) {
+      if (!piece) return;
+      piece.matrix.forEach((row, ry) => row.forEach((v, rx) => {
+        if (!v) return;
+        const px = x + rx * scale;
+        const py = y + ry * scale;
+        ctx.fillStyle = PIECE_COLORS[piece.type];
+        roundRect(ctx, px, py, scale - 3, scale - 3, 6, true, false);
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        roundRect(ctx, px + 3, py + 3, scale - 9, 5, 3, true, false);
+      }));
+    }
+
+    drawPanel(x, y, w, h, title) {
+      ctx.fillStyle = 'rgba(255,255,255,0.09)';
+      roundRect(ctx, x, y, w, h, 24, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, x, y, w, h, 24, false, true);
+      ctx.fillStyle = COLORS.text;
+      ctx.font = '900 24px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(title, x + 18, y + 36);
+    }
+
+    drawHUD() {
+      const hx = LAYOUT.hudX;
+      const hy = LAYOUT.hudY;
+      this.drawPanel(hx, hy, 226, 180, '다음 블록');
+      this.nextQueue.slice(0, 3).forEach((piece, i) => this.drawMiniPiece(piece, hx + 58, hy + 58 + i * 38, 22));
+      this.drawPanel(hx, hy + 198, 226, 120, '홀드');
+      this.drawMiniPiece(this.holdPiece, hx + 70, hy + 256, 24);
+      this.drawPanel(hx, hy + 336, 226, 340, '기록');
+      this.drawStat('점수', this.score, hx + 22, hy + 394, COLORS.gold);
+      this.drawStat('최고', this.best, hx + 22, hy + 466, COLORS.cyan);
+      this.drawStat('라인', this.lines, hx + 22, hy + 538, COLORS.ok);
+      this.drawStat('레벨', this.level, hx + 126, hy + 538, COLORS.danger);
+      this.drawStat('콤보', Math.max(0, this.combo), hx + 22, hy + 610, '#ff9f6e');
+      this.drawPanel(hx, hy + 696, 226, 118, '조작');
+      ctx.fillStyle = COLORS.muted;
+      ctx.font = '700 17px Arial, sans-serif';
+      ctx.fillText('← → 이동   ↑ 회전', hx + 20, hy + 750);
+      ctx.fillText('↓ 내리기  Space 낙하', hx + 20, hy + 778);
+      ctx.fillText('C 홀드   P 일시정지', hx + 20, hy + 806);
+    }
+
+    drawStat(label, value, x, y, color) {
+      ctx.fillStyle = COLORS.muted;
+      ctx.font = '700 18px Arial, sans-serif';
+      ctx.fillText(label, x, y);
+      ctx.fillStyle = color;
+      ctx.font = '900 28px Arial, sans-serif';
+      ctx.fillText(String(value), x, y + 34);
+    }
+
+    drawControls() {
+      this.touchButtons = [];
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      roundRect(ctx, 28, 1042, W - 56, 210, 28, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, 28, 1042, W - 56, 210, 28, false, true);
+      ctx.fillStyle = COLORS.text;
+      ctx.font = '900 25px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('모바일 터치 조작', W / 2, 1082);
+      const buttons = [
+        { label: '◀', x: 50, y: 1110, w: 92, h: 80, action: () => this.move(-1) },
+        { label: '▶', x: 152, y: 1110, w: 92, h: 80, action: () => this.move(1) },
+        { label: '회전', x: 268, y: 1110, w: 112, h: 80, action: () => this.rotateCurrent() },
+        { label: '내리기', x: 392, y: 1110, w: 112, h: 80, action: () => this.softDrop(true) },
+        { label: '낙하', x: 516, y: 1110, w: 136, h: 80, action: () => this.hardDrop() },
+        { label: '홀드', x: 50, y: 1200, w: 132, h: 50, action: () => this.hold() },
+        { label: '시작/정지', x: 198, y: 1200, w: 190, h: 50, action: () => { if (this.state === STATE.TITLE || this.state === STATE.GAMEOVER) this.start(); else this.togglePause(); } },
+        { label: '다시 시작', x: 404, y: 1200, w: 248, h: 50, action: () => this.start() }
+      ];
+      buttons.forEach(btn => this.drawButton(btn));
+    }
+
+    drawButton(btn) {
+      this.touchButtons.push(btn);
+      const g = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.h);
+      g.addColorStop(0, 'rgba(95,142,255,0.96)');
+      g.addColorStop(1, 'rgba(70,82,220,0.96)');
+      ctx.fillStyle = g;
+      roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 18, true, false);
+      ctx.strokeStyle = 'rgba(255,255,255,0.26)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 18, false, true);
+      ctx.fillStyle = '#fff';
+      ctx.font = btn.h > 60 ? '900 27px Arial, sans-serif' : '900 21px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + (btn.h > 60 ? 9 : 7));
+    }
+
+    drawOverlay() {
+      if (this.state === STATE.PLAYING && this.messageTimer <= 0) return;
+      let title = this.message;
+      let subtitle = '';
+      let showBig = false;
+      if (this.state === STATE.TITLE) {
+        title = '테트리스 블록 배틀';
+        subtitle = '라인을 완성해 지우고, 홀드와 고스트를 활용하세요.\nEnter 또는 화면 터치로 시작합니다.';
+        showBig = true;
+      } else if (this.state === STATE.PAUSED) {
+        title = '일시정지';
+        subtitle = 'P 또는 시작/정지 버튼을 누르면 계속합니다.';
+        showBig = true;
+      } else if (this.state === STATE.GAMEOVER) {
+        title = '게임 오버';
+        subtitle = `최종 점수 ${this.score}\nEnter 또는 다시 시작 버튼으로 재도전!`;
+        showBig = true;
+      }
+      const alpha = showBig ? 1 : clamp(this.messageTimer / 0.5, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      if (showBig) {
+        ctx.fillStyle = 'rgba(0,0,0,0.56)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(255,255,255,0.13)';
+        roundRect(ctx, 68, 404, W - 136, 320, 34, true, false);
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 3;
+        roundRect(ctx, 68, 404, W - 136, 320, 34, false, true);
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.42)';
+        roundRect(ctx, 100, 468, W - 200, 120, 28, true, false);
+      }
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.font = showBig ? '900 48px Arial, sans-serif' : '900 34px Arial, sans-serif';
+      ctx.fillText(title, W / 2, showBig ? 494 : 532);
+      if (subtitle) {
+        ctx.font = '700 23px Arial, sans-serif';
+        ctx.fillStyle = '#d7e0ff';
+        subtitle.split('\n').forEach((line, i) => ctx.fillText(line, W / 2, 558 + i * 36));
+      }
+      ctx.restore();
+    }
+
+    render() {
+      this.drawBackground();
+      ctx.save();
+      if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
+      this.drawFrame();
+      this.drawBoard();
+      this.drawHUD();
+      ctx.restore();
+      this.particles.forEach(p => p.draw(ctx));
+      this.drawControls();
+      this.drawOverlay();
+    }
+  }
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return { r: parseInt(h.slice(0,2), 16), g: parseInt(h.slice(2,4), 16), b: parseInt(h.slice(4,6), 16) };
+  }
+  function toHex(v) { return clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0'); }
+  function lighten(hex, f) {
+    const c = hexToRgb(hex);
+    return '#' + toHex(c.r + (255 - c.r) * f) + toHex(c.g + (255 - c.g) * f) + toHex(c.b + (255 - c.b) * f);
+  }
+  function darken(hex, f) {
+    const c = hexToRgb(hex);
+    return '#' + toHex(c.r * (1 - f)) + toHex(c.g * (1 - f)) + toHex(c.b * (1 - f));
+  }
+
+  const game = new TetrisGame();
+  let last = 0;
+  function loop(ts) {
+    if (!last) last = ts;
+    const dt = Math.min(0.033, (ts - last) / 1000);
+    last = ts;
+    game.update(dt);
+    game.render();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

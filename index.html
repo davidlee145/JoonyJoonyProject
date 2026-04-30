@@ -1,3120 +1,1028 @@
 <!doctype html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <title>주니주니 패스트푸드 알바</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
-    <style>
-      * {
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-        user-select: none;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>주니주니 랜덤 게임</title>
+  <style>
+    :root {
+      --bg1: #0a1031;
+      --bg2: #1d3472;
+      --card: rgba(255,255,255,0.12);
+      --stroke: rgba(255,255,255,0.2);
+      --text: #eef3ff;
+      --muted: #cbd8ff;
+      --shadow: 0 24px 60px rgba(0,0,0,0.35);
+      --pink: #ff5ba7;
+      --cyan: #4ed9ff;
+      --yellow: #ffd64d;
+      --green: #65db61;
+      --orange: #ff9640;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(114,162,255,0.35), transparent 34%),
+        radial-gradient(circle at 85% 15%, rgba(255,214,77,0.2), transparent 28%),
+        linear-gradient(180deg, var(--bg2) 0%, #10194a 38%, #070c22 100%);
+      color: var(--text);
+    }
+    body::before, body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 42vmax;
+      height: 42vmax;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.16;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before { left: -12vmax; top: -8vmax; background: #4ed9ff; }
+    body::after { right: -12vmax; bottom: -12vmax; background: #ff5ba7; }
+    .screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 1;
+    }
+    .hidden { display: none !important; }
+    #introScreen {
+      background: radial-gradient(circle at center, rgba(255,255,255,0.06), rgba(0,0,0,0.0) 40%);
+      flex-direction: column;
+      gap: 22px;
+      text-align: center;
+    }
+    .intro-glow {
+      position: absolute;
+      width: min(78vw, 520px);
+      height: min(78vw, 520px);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.3), rgba(78,217,255,0.1) 50%, transparent 72%);
+      filter: blur(14px);
+      animation: pulse 2.3s ease-in-out infinite;
+    }
+    #introLogo {
+      position: relative;
+      width: min(72vw, 460px);
+      max-width: 88%;
+      opacity: 0;
+      transform: scale(0.84);
+      filter: drop-shadow(0 22px 40px rgba(0,0,0,0.32));
+      transition: opacity 1.2s ease, transform 1.2s ease;
+      z-index: 1;
+    }
+    #introLogo.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .intro-title {
+      z-index: 1;
+      font-size: clamp(30px, 4.5vw, 48px);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    }
+    .intro-sub {
+      z-index: 1;
+      font-size: clamp(14px, 2.2vw, 22px);
+      color: var(--muted);
+    }
+    @keyframes pulse {
+      0%,100% { transform: scale(0.96); opacity: 0.8; }
+      50% { transform: scale(1.06); opacity: 1; }
+    }
+    .panel {
+      width: min(100%, 1020px);
+      max-height: calc(100vh - 32px);
+      border-radius: 30px;
+      border: 1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.08));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+    #rouletteScreen .panel {
+      padding: 24px 22px 20px;
+      display: grid;
+      grid-template-columns: minmax(320px, 520px) minmax(280px, 1fr);
+      gap: 12px 22px;
+      align-items: center;
+    }
+    .roulette-side {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+    }
+    .roulette-info {
+      padding: 14px 10px 18px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .title-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      width: fit-content;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.08);
+      color: var(--yellow);
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .roulette-title {
+      margin: 0;
+      font-size: clamp(32px, 4vw, 52px);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    .roulette-desc {
+      margin: 0;
+      font-size: clamp(16px, 2vw, 22px);
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 6px 0 2px;
+    }
+    .pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+    }
+    .wheel-wrap {
+      position: relative;
+      width: min(82vw, 500px);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      margin: 0 auto;
+    }
+    #wheelCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+      touch-action: manipulation;
+      filter: drop-shadow(0 26px 40px rgba(0,0,0,0.45));
+    }
+    .wheel-pointer {
+      position: absolute;
+      top: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 22px solid transparent;
+      border-right: 22px solid transparent;
+      border-top: 50px solid #fff3bf;
+      border-bottom: 0 solid transparent;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.5));
+      z-index: 5;
+    }
+    .wheel-pointer::after {
+      content: "";
+      position: absolute;
+      left: -13px;
+      top: -42px;
+      width: 26px;
+      height: 11px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.22);
+    }
+    .result-card {
+      border-radius: 24px;
+      padding: 16px 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.07));
+      border: 1px solid rgba(255,255,255,0.16);
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+    .result-card small {
+      color: #b7c9ff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .result-card strong {
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.25;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 6px;
+    }
+    button {
+      border: 0;
+      outline: none;
+      cursor: pointer;
+      font: inherit;
+      color: #fff;
+      user-select: none;
+    }
+    .action-btn {
+      min-width: 150px;
+      border-radius: 18px;
+      padding: 16px 20px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+      transition: transform .15s ease, opacity .15s ease, filter .2s ease;
+    }
+    .action-btn:active { transform: translateY(2px) scale(.99); }
+    .action-btn[disabled] { opacity: .45; cursor: not-allowed; filter: grayscale(.12); }
+    .spin-btn { background: linear-gradient(180deg, #51e2ff, #248dff); }
+    .stop-btn { background: linear-gradient(180deg, #ff7c9c, #ff4782); }
+    .secondary-btn { background: linear-gradient(180deg, #92a6ff, #586df4); }
+    .game-status {
+      font-size: 16px;
+      color: #d9e3ff;
+      min-height: 24px;
+    }
+    #gameScreen {
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 0;
+      background: linear-gradient(180deg, rgba(7,12,34,.98), rgba(7,12,34,.98));
+    }
+    .game-shell {
+      flex: 1;
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .game-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(14px);
+      z-index: 5;
+    }
+    .game-title {
+      font-size: clamp(18px, 2.2vw, 28px);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .back-btn {
+      border-radius: 14px;
+      padding: 12px 16px;
+      background: linear-gradient(180deg, #8ea5ff, #6075ff);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    #gameHost {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+    #gameHost iframe,
+    #gameHost canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #061228;
+    }
+    .canvas-shell {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 10px;
+    }
+    #gameHost .canvas-shell canvas {
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 9 / 16;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: var(--shadow);
+      background: #f7e6c8;
+    }
+    #mobileControls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      padding: 10px 12px 14px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.04);
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .ctrl-btn {
+      min-width: 76px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.08));
+      border: 1px solid rgba(255,255,255,0.12);
+      font-weight: 800;
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    }
+    .ctrl-btn.wide { min-width: 120px; }
+    .empty-controls {
+      color: #b9c8ff;
+      font-size: 14px;
+      padding: 6px 0 10px;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0,0,0,.56);
+      z-index: 20;
+      backdrop-filter: blur(5px);
+    }
+    .modal.show { display: flex; }
+    .modal-card {
+      width: min(90vw, 520px);
+      border-radius: 28px;
+      padding: 26px 22px 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.97), rgba(239,244,255,0.97));
+      color: #25345a;
+      text-align: center;
+      box-shadow: 0 28px 60px rgba(0,0,0,.35);
+    }
+    .modal-card h3 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1.1;
+    }
+    .modal-card p {
+      margin: 0;
+      font-size: clamp(18px, 2.2vw, 22px);
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    .modal-actions {
+      margin-top: 18px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 860px) {
+      #rouletteScreen .panel {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 8px;
       }
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        min-height: 100%;
-        min-height: 100dvh;
-        overflow: hidden;
-        background: radial-gradient(
-          circle at top,
-          #fff6ea 0%,
-          #ffe6bd 56%,
-          #ffd48f 100%
-        );
-        font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-        touch-action: none;
-      }
-      body {
-        display: grid;
-        place-items: center;
-      }
-      #game-wrap {
-        width: min(100vw, calc(100dvh * 0.5625));
-        height: min(100dvh, calc(100vw * 1.7777777778));
-        display: grid;
-        place-items: center;
-        margin: auto;
-      }
-      canvas {
-        display: block;
-        width: 100% !important;
-        height: 100% !important;
-        border-radius: 20px;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
-      }
-      #ui-modal {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.18s ease;
-        z-index: 9999;
-      }
-      #ui-modal.is-open {
-        pointer-events: auto;
-        opacity: 1;
-      }
-      .ui-modal__backdrop {
-        position: absolute;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.46);
-        backdrop-filter: blur(2px);
-      }
-      .ui-modal__panel {
-        position: relative;
-        width: min(92vw, 560px);
-        background: #fffbf4;
-        border: 6px solid var(--modal-accent, #d81f2a);
-        border-radius: 30px;
-        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
-        padding: 34px 28px 28px;
-        text-align: center;
-      }
-      .ui-modal__title {
-        margin: 0 0 18px;
-        font-size: clamp(34px, 5vw, 50px);
-        line-height: 1.15;
-        color: var(--modal-accent, #d81f2a);
-      }
-      .ui-modal__summary,
-      .ui-modal__detail {
-        margin: 0;
-        white-space: pre-line;
-        color: #5f3323;
-      }
-      .ui-modal__summary {
-        font-size: clamp(24px, 3.7vw, 32px);
-        font-weight: 700;
-      }
-      .ui-modal__detail {
-        margin-top: 20px;
-        font-size: clamp(20px, 3vw, 27px);
-        line-height: 1.5;
-      }
-      .ui-modal__button {
-        margin-top: 28px;
-        width: min(100%, 300px);
-        min-height: 82px;
-        border: 0;
-        border-radius: 22px;
-        background: var(--modal-accent, #d81f2a);
-        color: #fff;
-        font-size: clamp(28px, 4vw, 34px);
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="game-wrap"></div>
+      .roulette-info { padding: 0 6px 8px; }
+      .roulette-side { order: -1; }
+      .wheel-wrap { width: min(86vw, 460px); }
+      .game-topbar { padding: 10px 12px; }
+    }
 
-    <div id="ui-modal" aria-hidden="true">
-      <div class="ui-modal__backdrop"></div>
-      <div class="ui-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ui-modal-title">
-        <h2 id="ui-modal-title" class="ui-modal__title"></h2>
-        <p class="ui-modal__summary"></p>
-        <p class="ui-modal__detail"></p>
-        <button id="ui-modal-button" type="button" class="ui-modal__button"></button>
+    @media (max-width: 640px) {
+      .screen { padding: 10px; }
+      #rouletteScreen .panel {
+        width: min(100%, 560px);
+        max-height: calc(100dvh - 20px);
+        overflow-y: auto;
+        border-radius: 24px;
+        padding: 14px 12px 16px;
+      }
+      .wheel-wrap { width: min(88vw, 390px); }
+      .roulette-title { font-size: clamp(28px, 9vw, 42px); }
+      .roulette-desc { font-size: 15px; }
+      .pill-list { gap: 7px; }
+      .pill { padding: 8px 10px; font-size: 12px; }
+      .controls-row { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+      .controls-row .action-btn { min-width: 0; width: 100%; padding: 15px 10px; font-size: 16px; }
+      .controls-row .secondary-btn { grid-column: 1 / -1; }
+      .game-shell { grid-template-rows: auto minmax(0, 1fr) auto; height: 100dvh; }
+      .canvas-shell { padding: 6px; }
+      #mobileControls { gap: 8px; padding: 8px 8px 10px; }
+      .ctrl-btn { flex: 1 1 28%; min-width: 86px; padding: 13px 9px; }
+      .ctrl-btn.wide { flex-basis: 42%; min-width: 110px; }
+    }
+    @media (orientation: landscape) and (max-height: 640px) {
+      #rouletteScreen .panel { grid-template-columns: minmax(260px, 390px) 1fr; max-height: calc(100dvh - 18px); overflow-y: auto; }
+      .wheel-wrap { width: min(48vw, 360px); }
+      .roulette-title { font-size: clamp(26px, 4vw, 40px); }
+      .roulette-desc { font-size: 14px; }
+      .result-card { min-height: 74px; padding: 12px 14px; }
+      .action-btn { padding: 12px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <section id="introScreen" class="screen">
+    <div class="intro-glow"></div>
+    <img id="introLogo" alt="주니주니 로고" src="logo.png" />
+    <div class="intro-title">주니주니 랜덤 게임</div>
+    <div class="intro-sub">의준아 선준아 어린이날 축하해!</div>
+  </section>
+
+  <section id="rouletteScreen" class="screen hidden">
+    <div class="panel">
+      <div class="roulette-side">
+        <div class="wheel-wrap">
+          <div class="wheel-pointer"></div>
+          <canvas id="wheelCanvas" width="560" height="560"></canvas>
+        </div>
+      </div>
+      <div class="roulette-info">
+        <div class="title-badge">🎲 랜덤 선택</div>
+        <h1 class="roulette-title">주니주니 랜덤 게임</h1>
+        <p class="roulette-desc">
+          <strong>돌리기</strong> 버튼으로 룰렛을 회전시키고,<br />
+          <strong>멈추기</strong> 버튼으로 원하는 순간에 결과를 결정하세요.
+        </p>
+        <div class="pill-list">
+          <div class="pill">🍔 패스트푸드 알바</div>
+          <div class="pill">🧱 테트리스 블록 배틀</div>
+          <div class="pill">✈️ 풍선 팡팡 갤럭시</div>
+          <div class="pill">🤖 AI 미션</div>
+        </div>
+        <div class="result-card">
+          <small>선택 결과</small>
+          <strong id="resultText">룰렛을 돌려 게임을 골라보세요!</strong>
+          <div class="game-status" id="rouletteStatus">버튼으로 시작과 정지를 조작할 수 있어요.</div>
+        </div>
+        <div class="controls-row">
+          <button id="spinBtn" class="action-btn spin-btn">돌리기</button>
+          <button id="stopBtn" class="action-btn stop-btn" disabled>멈추기</button>
+          <button id="rerollBtn" class="action-btn secondary-btn">직접 선택</button>
+        </div>
       </div>
     </div>
+  </section>
 
-    <script>
-      const GAME_WIDTH = 720;
-      const GAME_HEIGHT = 1280;
+  <section id="gameScreen" class="screen hidden">
+    <div class="game-shell">
+      <div class="game-topbar">
+        <button id="backBtn" class="back-btn">← 룰렛으로 돌아가기</button>
+        <div class="game-title" id="gameTitle">게임</div>
+        <div style="width: 1px;"></div>
+      </div>
+      <div id="gameHost"></div>
+      <div id="mobileControls"><div class="empty-controls">선택된 게임에 맞는 버튼이 여기에 표시됩니다.</div></div>
+    </div>
+  </section>
 
-      const MAX_ROUNDS = 10;
-      const TOTAL_TIME_LIMIT = 360;
-      const ROUND_PIPE_TARGETS = [5, 6, 7, 8, 10, 12, 14, 16, 18, 20];
-      const ROUND_PAY = 5000;
+  <div id="modal" class="modal">
+    <div class="modal-card">
+      <h3 id="modalTitle"></h3>
+      <p id="modalBody"></p>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
 
-      function getPipeTarget(round) {
-        const index = Math.max(0, Math.min(MAX_ROUNDS - 1, round - 1));
-        return ROUND_PIPE_TARGETS[index];
+<script>
+(() => {
+  function decodeBase64Utf8(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  const LOGO_SRC = "logo.png";
+  const FASTFOOD_PAGE = "fastfood_original.html";
+  const STAIRS_PAGE = "tetris_stairs.html";
+  const GALAGA_PAGE = "balloon_galaga.html";
+  const TAU = Math.PI * 2;
+  const screens = {
+    intro: document.getElementById('introScreen'),
+    roulette: document.getElementById('rouletteScreen'),
+    game: document.getElementById('gameScreen')
+  };
+  const introLogo = document.getElementById('introLogo');
+  const wheelCanvas = document.getElementById('wheelCanvas');
+  const wctx = wheelCanvas.getContext('2d');
+  const spinBtn = document.getElementById('spinBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const rerollBtn = document.getElementById('rerollBtn');
+  const resultText = document.getElementById('resultText');
+  const rouletteStatus = document.getElementById('rouletteStatus');
+  const gameHost = document.getElementById('gameHost');
+  const gameTitle = document.getElementById('gameTitle');
+  const mobileControls = document.getElementById('mobileControls');
+  const backBtn = document.getElementById('backBtn');
+  const modal = document.getElementById('modal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  const modalActions = document.getElementById('modalActions');
+
+  const rouletteOptions = [
+    { id: 'fastfood', title: '패스트푸드 알바', wheelLabel: ['패스트푸드', '알바'], colors: ['#ffbf43', '#ff7f43'] },
+    { id: 'tetris', title: '테트리스 블록 배틀', wheelLabel: ['테트리스', '블록', '배틀'], colors: ['#4fd7ff', '#2c7fff'] },
+    { id: 'balloon', title: '풍선 팡팡 갤럭시', wheelLabel: ['풍선', '팡팡', '갤럭시'], colors: ['#82eb7c', '#2ec27e'] },
+    { id: 'ai', title: 'AI 미션', wheelLabel: ['AI', '직접', '게임 만들기'], colors: ['#ff6ec8', '#9d52ff'] }
+  ];
+
+  let currentGame = null;
+  let titleSpoken = false;
+
+  const wheelState = {
+    rotation: 0,
+    speed: 0,
+    freeSpin: false,
+    stopping: false,
+    directSelectMode: false,
+    stopAnim: null,
+    resultIndex: null,
+    lastTs: 0,
+    lastTickIndex: -1,
+    lastTickAt: 0
+  };
+
+  const ROULETTE_AUDIO = (() => {
+    let ctx = null;
+    function getCtx() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!ctx) ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+    function tone(freq, duration = 0.08, type = 'sine', volume = 0.055, delay = 0) {
+      const ac = getCtx();
+      if (!ac) return;
+      const now = ac.currentTime + delay;
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    }
+    return {
+      unlock: getCtx,
+      spinStart() { tone(360, 0.08, 'triangle', 0.055); tone(620, 0.11, 'triangle', 0.06, 0.055); },
+      tick() { tone(880, 0.035, 'square', 0.025); },
+      stopStart() { tone(520, 0.08, 'sawtooth', 0.04); },
+      select() { tone(740, 0.09, 'triangle', 0.055); tone(980, 0.13, 'sine', 0.05, 0.065); },
+      fanfare() { tone(523, 0.1, 'triangle', 0.06); tone(659, 0.11, 'triangle', 0.06, 0.08); tone(784, 0.16, 'triangle', 0.065, 0.16); }
+    };
+  })();
+
+  function showScreen(name) {
+    Object.values(screens).forEach(el => el.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+  }
+
+  function showModal(title, body, buttons = []) {
+    modalTitle.textContent = title;
+    modalBody.textContent = body;
+    modalActions.innerHTML = '';
+    buttons.forEach(btn => {
+      const b = document.createElement('button');
+      b.className = 'action-btn ' + (btn.className || 'secondary-btn');
+      b.textContent = btn.label;
+      b.addEventListener('click', () => {
+        hideModal();
+        if (btn.onClick) btn.onClick();
+      });
+      modalActions.appendChild(b);
+    });
+    modal.classList.add('show');
+  }
+  function hideModal() { modal.classList.remove('show'); }
+
+  function trySpeakTitle() {
+    if (titleSpoken || !('speechSynthesis' in window)) return;
+    titleSpoken = true;
+    try {
+      const utter = new SpeechSynthesisUtterance('주니주니 랜덤 게임');
+      utter.lang = 'ko-KR';
+      utter.rate = 0.95;
+      utter.pitch = 1.05;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      console.warn('speech failed', e);
+    }
+  }
+
+  function runIntro() {
+    showScreen('intro');
+    requestAnimationFrame(() => introLogo.classList.add('show'));
+    setTimeout(trySpeakTitle, 180);
+    setTimeout(() => {
+      showScreen('roulette');
+      rouletteStatus.textContent = '룰렛을 돌려 게임을 선택해보세요.';
+    }, 2800);
+  }
+
+  function getCurrentIndexAtPointer() {
+    const arc = TAU / rouletteOptions.length;
+    let normalized = ((-wheelState.rotation % TAU) + TAU) % TAU;
+    const idx = Math.floor(normalized / arc) % rouletteOptions.length;
+    return idx;
+  }
+
+  function getWheelIndexFromPointerEvent(event) {
+    const rect = wheelCanvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width * wheelCanvas.width;
+    const y = (event.clientY - rect.top) / rect.height * wheelCanvas.height;
+    const cx = wheelCanvas.width / 2;
+    const cy = wheelCanvas.height / 2;
+    const dx = x - cx;
+    const dy = y - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 90 || dist > 255) return null;
+    const arc = TAU / rouletteOptions.length;
+    const angle = Math.atan2(dy, dx);
+    const rel = ((angle - (wheelState.rotation - Math.PI / 2)) % TAU + TAU) % TAU;
+    return Math.floor(rel / arc) % rouletteOptions.length;
+  }
+
+  function chooseRouletteOption(index, byDirectSelect = false) {
+    if (index == null || !rouletteOptions[index]) return;
+    wheelState.freeSpin = false;
+    wheelState.stopping = false;
+    wheelState.directSelectMode = false;
+    wheelState.stopAnim = null;
+    wheelState.resultIndex = index;
+    wheelState.speed = 0;
+    const chosen = rouletteOptions[index];
+    spinBtn.disabled = false;
+    stopBtn.disabled = true;
+    rerollBtn.disabled = false;
+    resultText.textContent = chosen.id === 'ai' ? 'AI 미션' : chosen.title;
+    rouletteStatus.textContent = byDirectSelect
+      ? `${chosen.title}을 직접 선택했어요!`
+      : (chosen.id === 'ai' ? 'AI 미션에 당첨되었어요!' : `${chosen.title} 준비 중...`);
+    if (byDirectSelect) ROULETTE_AUDIO.select();
+    else ROULETTE_AUDIO.fanfare();
+    drawWheel();
+    handleRouletteResult(chosen);
+  }
+
+  function drawWheel() {
+    const ctx = wctx;
+    const { width, height } = wheelCanvas;
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = 240;
+    const arc = TAU / rouletteOptions.length;
+
+    ctx.clearRect(0, 0, width, height);
+    const bgGrad = ctx.createRadialGradient(cx, cy, 36, cx, cy, radius + 28);
+    bgGrad.addColorStop(0, 'rgba(255,255,255,0.14)');
+    bgGrad.addColorStop(1, 'rgba(255,255,255,0.02)');
+    ctx.fillStyle = bgGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 26, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    ctx.beginPath();
+    ctx.arc(0, 0, radius + 14, 0, TAU);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fill();
+
+    for (let i = 0; i < rouletteOptions.length; i++) {
+      const opt = rouletteOptions[i];
+      const start = wheelState.rotation - Math.PI / 2 + i * arc;
+      const end = start + arc;
+      const grad = ctx.createLinearGradient(
+        Math.cos(start) * radius, Math.sin(start) * radius,
+        Math.cos(end) * radius, Math.sin(end) * radius
+      );
+      grad.addColorStop(0, opt.colors[0]);
+      grad.addColorStop(1, opt.colors[1]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.stroke();
+
+      ctx.save();
+      const mid = start + arc / 2;
+      ctx.rotate(mid);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(ctx, 62, -44, 126, 88, 18, true, false);
+      ctx.fillStyle = '#fff';
+      ctx.font = '900 23px Arial, sans-serif';
+      opt.wheelLabel.forEach((line, lineIdx) => {
+        ctx.fillText(line, 126, -18 + lineIdx * 24);
+      });
+      ctx.restore();
+    }
+
+    if (wheelState.resultIndex !== null && !wheelState.freeSpin && !wheelState.stopping) {
+      const i = wheelState.resultIndex;
+      const start = wheelState.rotation - Math.PI / 2 + i * arc;
+      const end = start + arc;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,255,0.23)';
+      ctx.fill();
+    }
+
+    const centerGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+    centerGrad.addColorStop(0, '#ffffff');
+    centerGrad.addColorStop(0.22, '#e6efff');
+    centerGrad.addColorStop(1, '#96acff');
+    ctx.beginPath();
+    ctx.arc(0, 0, 82, 0, TAU);
+    ctx.fillStyle = centerGrad;
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.stroke();
+    ctx.fillStyle = '#304479';
+    ctx.textAlign = 'center';
+    ctx.font = '900 20px Arial, sans-serif';
+    ctx.fillText('주니주니', 0, -18);
+    ctx.fillText('랜덤', 0, 8);
+    ctx.fillText('게임', 0, 34);
+    if (wheelState.directSelectMode) {
+      ctx.fillStyle = 'rgba(6,13,32,0.45)';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 12, 0, TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.78)';
+      ctx.lineWidth = 9;
+      ctx.setLineDash([16, 10]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  function wheelLoop(ts) {
+    const prev = wheelState.lastTs || ts;
+    const dt = Math.min(0.033, (ts - prev) / 1000);
+    wheelState.lastTs = ts;
+
+    if (wheelState.freeSpin) {
+      wheelState.speed += (8.2 - wheelState.speed) * Math.min(1, dt * 5);
+      wheelState.rotation += wheelState.speed * dt;
+    } else if (wheelState.stopping && wheelState.stopAnim) {
+      const a = wheelState.stopAnim;
+      a.elapsed += dt;
+      const t = Math.min(1, a.elapsed / a.duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      wheelState.rotation = a.from + (a.to - a.from) * eased;
+      if (t >= 1) {
+        wheelState.stopping = false;
+        wheelState.stopAnim = null;
+        chooseRouletteOption(a.index, false);
       }
+    }
 
-      function getCompletedRounds(round) {
-        return Math.max(0, Math.min(MAX_ROUNDS, round - 1));
+    if (wheelState.freeSpin || wheelState.stopping) {
+      const tickIndex = getCurrentIndexAtPointer();
+      if (tickIndex !== wheelState.lastTickIndex && ts - wheelState.lastTickAt > 70) {
+        wheelState.lastTickIndex = tickIndex;
+        wheelState.lastTickAt = ts;
+        ROULETTE_AUDIO.tick();
       }
+    }
 
-      function calculateSalary(completedRounds) {
-        return completedRounds * ROUND_PAY;
-      }
+    drawWheel();
+    requestAnimationFrame(wheelLoop);
+  }
 
-      function formatWon(value) {
-        return value.toLocaleString("ko-KR") + "원";
-      }
+  function startSpin() {
+    if (wheelState.freeSpin || wheelState.stopping) return;
+    wheelState.directSelectMode = false;
+    wheelState.resultIndex = null;
+    wheelState.freeSpin = true;
+    wheelState.speed = Math.max(wheelState.speed, 3.2);
+    wheelState.lastTickIndex = -1;
+    resultText.textContent = '룰렛 회전 중...';
+    rouletteStatus.textContent = '멈추기 버튼으로 원하는 순간에 멈춰보세요.';
+    spinBtn.disabled = true;
+    stopBtn.disabled = false;
+    rerollBtn.disabled = true;
+    ROULETTE_AUDIO.unlock();
+    ROULETTE_AUDIO.spinStart();
+  }
 
-      function kenneySoundUrl(...parts) {
-        return (
-          "https://gamesounds.xyz/" + parts.map(encodeURIComponent).join("/")
+  function stopSpin() {
+    if (!wheelState.freeSpin || wheelState.stopping) return;
+    wheelState.freeSpin = false;
+    wheelState.stopping = true;
+    wheelState.directSelectMode = false;
+    stopBtn.disabled = true;
+    ROULETTE_AUDIO.stopStart();
+    const idx = Math.floor(Math.random() * rouletteOptions.length);
+    const arc = TAU / rouletteOptions.length;
+    let target = -(idx + 0.5) * arc;
+    while (target < wheelState.rotation + TAU * 4.5) target += TAU;
+    wheelState.stopAnim = { from: wheelState.rotation, to: target, duration: 2.9, elapsed: 0, index: idx };
+    rouletteStatus.textContent = '결과를 확인하는 중...';
+  }
+
+  function resetRoulette() {
+    wheelState.freeSpin = false;
+    wheelState.stopping = false;
+    wheelState.directSelectMode = false;
+    wheelState.stopAnim = null;
+    wheelState.resultIndex = null;
+    wheelState.speed = 0;
+    resultText.textContent = '룰렛을 돌려 게임을 골라보세요!';
+    rouletteStatus.textContent = '버튼으로 시작과 정지를 조작할 수 있어요.';
+    spinBtn.disabled = false;
+    stopBtn.disabled = true;
+    rerollBtn.disabled = false;
+    drawWheel();
+  }
+
+  function enableDirectSelect() {
+    if (wheelState.freeSpin || wheelState.stopping) return;
+    wheelState.directSelectMode = true;
+    wheelState.resultIndex = null;
+    spinBtn.disabled = false;
+    stopBtn.disabled = true;
+    rerollBtn.disabled = false;
+    resultText.textContent = '원하는 칸을 눌러 직접 선택하세요!';
+    rouletteStatus.textContent = 'PC는 마우스 클릭, 모바일은 터치로 선택할 수 있어요.';
+    ROULETTE_AUDIO.unlock();
+    ROULETTE_AUDIO.select();
+    drawWheel();
+  }
+
+  function handleRouletteResult(option) {
+    if (option.id === 'ai') {
+      setTimeout(() => {
+        showModal(
+          'AI 미션!',
+          '의준이 선준이가 AI를 사용해서 직접 게임을 만들어보세요.',
+          [{ label: '다시 룰렛 돌리기', className: 'secondary-btn', onClick: () => resetRoulette() }]
         );
-      }
+      }, 650);
+      return;
+    }
+    setTimeout(() => launchGame(option.id), 900);
+  }
 
-      const UI_MODAL = (() => {
-        const root = document.getElementById("ui-modal");
-        const panel = root.querySelector(".ui-modal__panel");
-        const titleEl = document.getElementById("ui-modal-title");
-        const summaryEl = root.querySelector(".ui-modal__summary");
-        const detailEl = root.querySelector(".ui-modal__detail");
-        const buttonEl = document.getElementById("ui-modal-button");
-        let primaryAction = null;
+  function clearGameHost() {
+    if (currentGame && typeof currentGame.destroy === 'function') currentGame.destroy();
+    currentGame = null;
+    gameHost.innerHTML = '';
+    mobileControls.classList.remove('hidden');
+    mobileControls.innerHTML = '<div class="empty-controls">선택된 게임에 맞는 버튼이 여기에 표시됩니다.</div>';
+  }
 
-        buttonEl.addEventListener("click", () => {
-          const action = primaryAction;
-          hide();
-          if (typeof action === "function") action();
-        });
+  function launchGame(gameId) {
+    clearGameHost();
+    showScreen('game');
+    const option = rouletteOptions.find(v => v.id === gameId);
+    gameTitle.textContent = option ? option.title : '게임';
 
-        function hide() {
-          primaryAction = null;
-          root.classList.remove("is-open");
-          root.setAttribute("aria-hidden", "true");
-        }
+    const iframePages = {
+      fastfood: FASTFOOD_PAGE,
+      tetris: STAIRS_PAGE,
+      balloon: GALAGA_PAGE
+    };
 
-        function show({ title, summary = "", detail = "", buttonLabel, accent = "#d81f2a", onPrimary }) {
-          panel.style.setProperty("--modal-accent", accent);
-          titleEl.textContent = title || "";
-          summaryEl.textContent = summary || "";
-          detailEl.textContent = detail || "";
-          detailEl.style.display = detail ? "block" : "none";
-          buttonEl.textContent = buttonLabel || "확인";
-          primaryAction = onPrimary || null;
-          root.classList.add("is-open");
-          root.setAttribute("aria-hidden", "false");
-          buttonEl.focus({ preventScroll: true });
-        }
-
-        return { show, hide };
-      })();
-
-      const KENNEY_SOUND_PACK = ["Kenney's Sound Pack"];
-      const SOUND_URLS = {
-        kitchenMusic: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Music Loops",
-            "Loops",
-            "Swinging Pants.ogg",
-          ),
-        ],
-        deliveryMusic: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Music Loops",
-            "Loops",
-            "Drumming Sticks.ogg",
-          ),
-        ],
-        uiSelect: [
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "click1.ogg"),
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "click3.ogg"),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "select_003.ogg",
-          ),
-        ],
-        stack: [
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "switch1.ogg"),
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "switch4.ogg"),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "switch_005.ogg",
-          ),
-        ],
-        trayPlace: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "drop_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "drop_003.ogg",
-          ),
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "switch9.ogg"),
-        ],
-        cancel: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "back_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "back_003.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "minimize_001.ogg",
-          ),
-        ],
-        success: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "confirmation_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "confirmation_003.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "confirmation_004.ogg",
-          ),
-        ],
-        fail: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "error_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "error_005.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "error_008.ogg",
-          ),
-        ],
-        deliveryStart: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "open_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "open_003.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "maximize_003.ogg",
-          ),
-        ],
-        flap: [
-          kenneySoundUrl(...KENNEY_SOUND_PACK, "UI Audio", "switch2.ogg"),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "switch_006.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Impact Sounds",
-            "impactSoft_medium_002.ogg",
-          ),
-        ],
-        gate: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "tick_001.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "tick_002.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "pluck_001.ogg",
-          ),
-        ],
-        crash: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Impact Sounds",
-            "impactMetal_medium_002.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Impact Sounds",
-            "impactPlate_heavy_002.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Impact Sounds",
-            "impactSoft_heavy_002.ogg",
-          ),
-        ],
-        win: [
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "confirmation_004.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "maximize_005.ogg",
-          ),
-          kenneySoundUrl(
-            ...KENNEY_SOUND_PACK,
-            "Interface Sounds",
-            "maximize_008.ogg",
-          ),
-        ],
+    if (iframePages[gameId]) {
+      const iframe = document.createElement('iframe');
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+      iframe.setAttribute('allow', 'autoplay');
+      iframe.tabIndex = 0;
+      iframe.style.outline = 'none';
+      if (iframePages[gameId].trim().startsWith('<')) iframe.srcdoc = iframePages[gameId];
+      else iframe.src = iframePages[gameId];
+      const focusIframe = () => {
+        try { iframe.focus(); } catch (e) {}
+        try { iframe.contentWindow && iframe.contentWindow.focus(); } catch (e) {}
       };
-
-      class GameAudioManager {
-        constructor() {
-          this.masterVolume = 1;
-          this.sfxVolume = 0.9;
-          this.musicVolume = 0.26;
-          this.muted = false;
-          this.audioCache = new Map();
-          this.music = null;
-          this.musicKey = null;
-          this.desiredMusicKey = null;
-          this.audioContext = null;
-        }
-
-        preloadAll() {
-          const urls = new Set(Object.values(SOUND_URLS).flat());
-          urls.forEach((url) => this.prepare(url));
-        }
-
-        prepare(url) {
-          if (!this.audioCache.has(url)) {
-            const audio = new Audio(url);
-            audio.preload = "auto";
-            this.audioCache.set(url, audio);
-          }
-          return this.audioCache.get(url);
-        }
-
-        unlock() {
-          this.ensureContext();
-          this.preloadAll();
-        }
-
-        ensureContext() {
-          if (this.audioContext) {
-            if (this.audioContext.state === "suspended")
-              this.audioContext.resume();
-            return this.audioContext;
-          }
-
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          if (!Ctx) return null;
-
-          this.audioContext = new Ctx();
-          if (this.audioContext.state === "suspended")
-            this.audioContext.resume();
-          return this.audioContext;
-        }
-
-        clampVolume(value) {
-          return Phaser.Math.Clamp(value, 0, 1);
-        }
-
-        toggleMute() {
-          this.muted = !this.muted;
-
-          if (this.muted) {
-            if (this.music) this.music.pause();
-          } else if (this.desiredMusicKey) {
-            this.playMusic(this.desiredMusicKey);
-          }
-
-          return this.muted;
-        }
-
-        play(name, options = {}) {
-          if (this.muted) return;
-
-          const list = SOUND_URLS[name];
-          if (!list || list.length === 0) {
-            this.playSynth(name, options);
-            return;
-          }
-
-          this.unlock();
-
-          const url = list[Math.floor(Math.random() * list.length)];
-          const base = this.prepare(url);
-          const audio = base.cloneNode();
-          audio.volume = this.clampVolume(
-            (options.volume ?? 1) * this.sfxVolume * this.masterVolume,
-          );
-          audio.playbackRate = Phaser.Math.Clamp(
-            (options.rate ?? 1) +
-              (Math.random() * 2 - 1) * (options.rateJitter ?? 0),
-            0.82,
-            1.22,
-          );
-
-          const playPromise = audio.play();
-          if (playPromise?.catch) {
-            playPromise.catch(() => this.playSynth(name, options));
-          }
-        }
-
-        playMusic(name) {
-          this.desiredMusicKey = name;
-          if (this.muted) return;
-          if (this.musicKey === name && this.music && !this.music.paused)
-            return;
-
-          const list = SOUND_URLS[name];
-          if (!list || list.length === 0) return;
-
-          this.unlock();
-          this.stopMusic();
-
-          const music = this.prepare(list[0]).cloneNode();
-          music.loop = true;
-          music.volume = this.clampVolume(this.musicVolume * this.masterVolume);
-
-          const playPromise = music.play();
-          if (playPromise?.catch) {
-            playPromise.catch(() => {
-              this.music = null;
-              this.musicKey = null;
-            });
-          }
-
-          this.music = music;
-          this.musicKey = name;
-        }
-
-        stopMusic() {
-          if (this.music) {
-            this.music.pause();
-            this.music.currentTime = 0;
-          }
-          this.music = null;
-          this.musicKey = null;
-        }
-
-        playSynth(name, options = {}) {
-          const ctx = this.ensureContext();
-          if (!ctx || this.muted) return;
-
-          const now = ctx.currentTime;
-          const volume = this.clampVolume(
-            0.05 * (options.volume ?? 1) * this.sfxVolume * this.masterVolume,
-          );
-
-          const tone = (
-            freqA,
-            freqB,
-            duration,
-            type = "triangle",
-            delay = 0,
-          ) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freqA, now + delay);
-            osc.frequency.exponentialRampToValueAtTime(
-              Math.max(40, freqB),
-              now + delay + duration,
-            );
-            gain.gain.setValueAtTime(0.0001, now + delay);
-            gain.gain.exponentialRampToValueAtTime(volume, now + delay + 0.01);
-            gain.gain.exponentialRampToValueAtTime(
-              0.0001,
-              now + delay + duration,
-            );
-            osc.connect(gain).connect(ctx.destination);
-            osc.start(now + delay);
-            osc.stop(now + delay + duration + 0.02);
-          };
-
-          switch (name) {
-            case "success":
-            case "win":
-              tone(520, 860, 0.1, "sine", 0);
-              tone(740, 1180, 0.14, "triangle", 0.07);
-              break;
-            case "fail":
-            case "crash":
-              tone(280, 140, 0.16, "square", 0);
-              break;
-            case "gate":
-              tone(880, 1160, 0.06, "triangle", 0);
-              break;
-            default:
-              tone(420, 620, 0.06, "triangle", 0);
-              break;
-          }
-        }
-      }
-
-      const GAME_AUDIO = new GameAudioManager();
-
-      const SOUND_TOGGLE_RIGHT = GAME_WIDTH - 22;
-      const SOUND_TOGGLE_Y = 42;
-
-      function attachSoundToggle(scene, rightX, centerY) {
-        const width = 150;
-        const height = 44;
-        const x = rightX - width / 2;
-
-        const bg = scene.add
-          .rectangle(x, centerY, width, height, 0x92231d, 0.92)
-          .setStrokeStyle(3, 0xf6d6a8)
-          .setInteractive({ useHandCursor: true })
-          .setDepth(1000);
-
-        const label = scene.add
-          .text(x, centerY, "", {
-            fontSize: "20px",
-            color: "#fff",
-            fontStyle: "bold",
-          })
-          .setOrigin(0.5)
-          .setDepth(1001);
-
-        const refresh = () => {
-          label.setText(GAME_AUDIO.muted ? "사운드 OFF" : "사운드 ON");
-        };
-
-        bg.on("pointerdown", () => {
-          GAME_AUDIO.toggleMute();
-          refresh();
-        });
-
-        refresh();
-        return { bg, label, refresh };
-      }
-
-      const INGREDIENTS = {
-        bunTop: {
-          key: "bunTop",
-          name: "윗빵",
-          texture: "bunTopTex",
-          category: "burger",
-        },
-        bunBottom: {
-          key: "bunBottom",
-          name: "아랫빵",
-          texture: "bunBottomTex",
-          category: "burger",
-        },
-        patty: {
-          key: "patty",
-          name: "소고기 패티",
-          texture: "pattyTex",
-          category: "burger",
-        },
-        chickenPatty: {
-          key: "chickenPatty",
-          name: "치킨 패티",
-          texture: "chickenPattyTex",
-          category: "burger",
-        },
-        cheese: {
-          key: "cheese",
-          name: "치즈",
-          texture: "cheeseTex",
-          category: "burger",
-        },
-        lettuce: {
-          key: "lettuce",
-          name: "양상추",
-          texture: "lettuceTex",
-          category: "burger",
-        },
-        bacon: {
-          key: "bacon",
-          name: "베이컨",
-          texture: "baconTex",
-          category: "burger",
-        },
-        ketchup: {
-          key: "ketchup",
-          name: "케찹",
-          texture: "ketchupTex",
-          category: "burger",
-        },
-        mayo: {
-          key: "mayo",
-          name: "마요네즈",
-          texture: "mayoTex",
-          category: "burger",
-        },
-        mustard: {
-          key: "mustard",
-          name: "머스터드",
-          texture: "mustardTex",
-          category: "burger",
-        },
-
-        fries: {
-          key: "fries",
-          name: "감자튀김",
-          texture: "friesTex",
-          category: "side",
-        },
-        onionRings: {
-          key: "onionRings",
-          name: "어니언 링",
-          texture: "onionRingsTex",
-          category: "side",
-        },
-
-        coke: {
-          key: "coke",
-          name: "콜라",
-          texture: "cokeTex",
-          category: "drink",
-        },
-        cider: {
-          key: "cider",
-          name: "사이다",
-          texture: "ciderTex",
-          category: "drink",
-        },
-        fanta: {
-          key: "fanta",
-          name: "환타",
-          texture: "fantaTex",
-          category: "drink",
-        },
-      };
-
-      const BURGER_RECIPES = [
-        {
-          title: "기본 버거",
-          burger: ["bunBottom", "ketchup", "patty", "bunTop"],
-        },
-        {
-          title: "치즈버거",
-          burger: [
-            "bunBottom",
-            "ketchup",
-            "patty",
-            "cheese",
-            "lettuce",
-            "bunTop",
-          ],
-        },
-        {
-          title: "치킨버거",
-          burger: ["bunBottom", "mayo", "lettuce", "chickenPatty", "bunTop"],
-        },
-        {
-          title: "더블 치킨버거",
-          burger: [
-            "bunBottom",
-            "ketchup",
-            "chickenPatty",
-            "cheese",
-            "chickenPatty",
-            "bunTop",
-          ],
-        },
-        {
-          title: "믹스 버거",
-          burger: [
-            "bunBottom",
-            "ketchup",
-            "patty",
-            "mustard",
-            "chickenPatty",
-            "lettuce",
-            "bunTop",
-          ],
-        },
-        {
-          title: "머스터드 버거",
-          burger: ["bunBottom", "mustard", "patty", "cheese", "bunTop"],
-        },
-        {
-          title: "상추 듬뿍 버거",
-          burger: [
-            "bunBottom",
-            "mayo",
-            "lettuce",
-            "patty",
-            "lettuce",
-            "bunTop",
-          ],
-        },
-        {
-          title: "치킨치즈 버거",
-          burger: [
-            "bunBottom",
-            "mustard",
-            "chickenPatty",
-            "cheese",
-            "lettuce",
-            "bunTop",
-          ],
-        },
-
-        {
-          title: "베이컨 버거",
-          burger: ["bunBottom", "mayo", "bacon", "patty", "cheese", "bunTop"],
-        },
-        {
-          title: "베이컨 치즈버거",
-          burger: [
-            "bunBottom",
-            "ketchup",
-            "patty",
-            "bacon",
-            "cheese",
-            "bunTop",
-          ],
-        },
-        {
-          title: "베이컨 상추버거",
-          burger: ["bunBottom", "mayo", "lettuce", "patty", "bacon", "bunTop"],
-        },
-        {
-          title: "더블 베이컨버거",
-          burger: [
-            "bunBottom",
-            "mustard",
-            "patty",
-            "bacon",
-            "patty",
-            "cheese",
-            "bunTop",
-          ],
-        },
-        {
-          title: "치킨 베이컨버거",
-          burger: [
-            "bunBottom",
-            "mayo",
-            "lettuce",
-            "chickenPatty",
-            "bacon",
-            "bunTop",
-          ],
-        },
-        {
-          title: "베이컨 믹스버거",
-          burger: [
-            "bunBottom",
-            "ketchup",
-            "patty",
-            "bacon",
-            "mustard",
-            "chickenPatty",
-            "bunTop",
-          ],
-        },
-        {
-          title: "베이컨 머스터드버거",
-          burger: [
-            "bunBottom",
-            "mustard",
-            "bacon",
-            "patty",
-            "cheese",
-            "bunTop",
-          ],
-        },
-        {
-          title: "베이컨 더블치즈버거",
-          burger: [
-            "bunBottom",
-            "mayo",
-            "patty",
-            "cheese",
-            "bacon",
-            "cheese",
-            "bunTop",
-          ],
-        },
-      ];
-
-      const SIDE_CHOICES = ["fries", "onionRings"];
-      const DRINK_CHOICES = ["coke", "cider", "fanta"];
-
-      function ingredientName(key) {
-        return INGREDIENTS[key]?.name || key;
-      }
-
-      function randomChoice(arr) {
-        return arr[Math.floor(Math.random() * arr.length)];
-      }
-
-      function generateRandomOrder(round) {
-        const recipe = randomChoice(BURGER_RECIPES);
-        const side = randomChoice(SIDE_CHOICES);
-        const drink = randomChoice(DRINK_CHOICES);
-
-        const tips = [
-          `버거: ${recipe.burger.map(ingredientName).join(" > ")}`,
-          `사이드: ${ingredientName(side)}`,
-          `음료: ${ingredientName(drink)}`,
-        ];
-
-        if (round >= 4 && Math.random() < 0.35) {
-          const altDrink = DRINK_CHOICES.find((v) => v !== drink) || drink;
-          tips.push(
-            `주의: ${ingredientName(altDrink)} 말고 ${ingredientName(drink)}!`,
-          );
-        }
-
-        return {
-          title: recipe.title,
-          burger: recipe.burger.slice(),
-          side,
-          drink,
-          tips,
-        };
-      }
-
-      class BootScene extends Phaser.Scene {
-        constructor() {
-          super("BootScene");
-        }
-
-        create() {
-          GAME_AUDIO.preloadAll();
-          this.makeTextures();
-          this.scene.start("KitchenScene", {
-            score: 0,
-            round: 1,
-            timeLeft: TOTAL_TIME_LIMIT,
-          });
-        }
-
-        makeTextures() {
-          const g = this.make.graphics({ x: 0, y: 0, add: false });
-
-          g.clear();
-          g.fillStyle(0xd07a28, 1);
-          g.fillEllipse(90, 44, 170, 70);
-          g.fillStyle(0xf4c15d, 1);
-          for (let i = 0; i < 8; i++)
-            g.fillCircle(35 + i * 16, 30 + (i % 2) * 4, 3);
-          g.generateTexture("bunTopTex", 180, 88);
-
-          g.clear();
-          g.fillStyle(0xc57a3b, 1);
-          g.fillRoundedRect(10, 18, 160, 42, 16);
-          g.generateTexture("bunBottomTex", 180, 80);
-
-          g.clear();
-          g.fillStyle(0x5d2f1c, 1);
-          g.fillRoundedRect(8, 18, 164, 34, 16);
-          g.fillStyle(0x6d3821, 1);
-          g.fillRoundedRect(18, 24, 144, 20, 10);
-          g.generateTexture("pattyTex", 180, 70);
-
-          g.clear();
-          g.fillStyle(0xc6904a, 1);
-          g.fillRoundedRect(8, 16, 164, 38, 18);
-          g.fillStyle(0xe2b66d, 1);
-          g.fillRoundedRect(18, 24, 144, 22, 10);
-          g.generateTexture("chickenPattyTex", 180, 70);
-
-          g.clear();
-          g.fillStyle(0xffd84a, 1);
-          g.fillTriangle(10, 20, 150, 20, 45, 58);
-          g.generateTexture("cheeseTex", 160, 70);
-
-          g.clear();
-          g.fillStyle(0x67b547, 1);
-          for (let i = 0; i < 6; i++)
-            g.fillEllipse(25 + i * 24, 36 + (i % 2) * 5, 38, 26);
-          g.generateTexture("lettuceTex", 180, 70);
-
-          g.clear();
-          g.fillStyle(0x8b3a2b, 1);
-
-          g.beginPath();
-          g.moveTo(12, 24);
-          g.lineTo(26, 18);
-          g.lineTo(40, 25);
-          g.lineTo(54, 19);
-          g.lineTo(68, 26);
-          g.lineTo(82, 20);
-          g.lineTo(96, 27);
-          g.lineTo(110, 21);
-          g.lineTo(124, 28);
-          g.lineTo(138, 22);
-          g.lineTo(148, 26);
-          g.lineTo(148, 43);
-          g.lineTo(136, 48);
-          g.lineTo(122, 42);
-          g.lineTo(108, 49);
-          g.lineTo(94, 43);
-          g.lineTo(80, 50);
-          g.lineTo(66, 44);
-          g.lineTo(52, 49);
-          g.lineTo(38, 43);
-          g.lineTo(24, 47);
-          g.lineTo(12, 42);
-          g.closePath();
-          g.fillPath();
-
-          g.fillStyle(0xd97a5f, 1);
-          g.beginPath();
-          g.moveTo(20, 29);
-          g.lineTo(34, 25);
-          g.lineTo(48, 31);
-          g.lineTo(62, 26);
-          g.lineTo(76, 32);
-          g.lineTo(90, 27);
-          g.lineTo(104, 33);
-          g.lineTo(118, 28);
-          g.lineTo(132, 34);
-          g.lineTo(140, 31);
-          g.lineTo(140, 35);
-          g.lineTo(128, 38);
-          g.lineTo(114, 34);
-          g.lineTo(100, 39);
-          g.lineTo(86, 34);
-          g.lineTo(72, 39);
-          g.lineTo(58, 34);
-          g.lineTo(44, 38);
-          g.lineTo(30, 33);
-          g.lineTo(20, 35);
-          g.closePath();
-          g.fillPath();
-
-          g.generateTexture("baconTex", 160, 70);
-
-          g.clear();
-          g.fillStyle(0xd81f2a, 1);
-          g.fillRoundedRect(20, 26, 120, 16, 8);
-          g.fillCircle(30, 34, 8);
-          g.fillCircle(70, 36, 8);
-          g.fillCircle(110, 34, 8);
-          g.generateTexture("ketchupTex", 160, 70);
-
-          g.clear();
-          g.fillStyle(0xd8c28f, 1);
-          g.fillRoundedRect(18, 27, 124, 18, 9);
-          g.fillCircle(29, 35, 9);
-          g.fillCircle(70, 37, 9);
-          g.fillCircle(111, 35, 9);
-          g.fillStyle(0xf2e0ad, 1);
-          g.fillRoundedRect(20, 25, 120, 16, 8);
-          g.fillCircle(30, 34, 8);
-          g.fillCircle(70, 36, 8);
-          g.fillCircle(110, 34, 8);
-          g.generateTexture("mayoTex", 160, 70);
-
-          g.clear();
-          g.fillStyle(0xf2c230, 1);
-          g.fillRoundedRect(20, 26, 120, 16, 8);
-          g.fillCircle(30, 34, 8);
-          g.fillCircle(70, 36, 8);
-          g.fillCircle(110, 34, 8);
-          g.generateTexture("mustardTex", 160, 70);
-
-          g.clear();
-          g.fillStyle(0xdf1f2d, 1);
-          g.fillRoundedRect(28, 20, 70, 80, 12);
-          g.fillStyle(0xf2c13c, 1);
-          for (let i = 0; i < 7; i++)
-            g.fillRoundedRect(20 + i * 11, 2 + (i % 2) * 3, 10, 46, 4);
-          g.generateTexture("friesTex", 130, 104);
-
-          g.clear();
-          const onionRingPositions = [
-            [26, 34],
-            [66, 30],
-            [102, 36],
-            [40, 74],
-            [82, 70],
-          ];
-          onionRingPositions.forEach(([x, y], index) => {
-            const radius = index % 2 === 0 ? 13 : 12;
-            g.lineStyle(8, 0xc98a3f, 1);
-            g.strokeCircle(x, y, radius);
-            g.lineStyle(3, 0xe8c27a, 1);
-            g.strokeCircle(x - 1, y - 1, radius - 1);
-          });
-          g.generateTexture("onionRingsTex", 130, 104);
-
-          const makeDrink = (tex, color) => {
-            g.clear();
-            g.fillStyle(color, 1);
-            g.fillRoundedRect(30, 16, 62, 92, 10);
-            g.fillStyle(0xffffff, 1);
-            g.fillRoundedRect(52, 0, 16, 30, 6);
-            g.fillStyle(0x0d0d0d, 1);
-            g.fillRect(59, -6, 3, 22);
-            g.generateTexture(tex, 120, 112);
-          };
-          makeDrink("cokeTex", 0x7b2a26);
-          makeDrink("ciderTex", 0x34a853);
-          makeDrink("fantaTex", 0xf57c00);
-
-          g.clear();
-          g.fillStyle(0xd81f2a, 1);
-          g.fillRoundedRect(0, 0, 260, 82, 20);
-          g.generateTexture("redButton", 260, 82);
-
-          g.clear();
-          g.fillStyle(0xf6d6a8, 1);
-          g.fillCircle(40, 36, 28);
-          g.fillStyle(0x2d2d2d, 1);
-          g.fillCircle(30, 31, 3);
-          g.fillCircle(50, 31, 3);
-          g.fillRect(32, 45, 16, 3);
-          g.fillStyle(0x5b3828, 1);
-          g.fillRoundedRect(10, 70, 60, 40, 18);
-          g.generateTexture("customerTex", 80, 120);
-
-          g.clear();
-          g.fillStyle(0xffffff, 1);
-          g.fillRoundedRect(0, 0, 250, 110, 18);
-          g.lineStyle(4, 0xd9c2a0, 1);
-          g.strokeRoundedRect(0, 0, 250, 110, 18);
-          g.generateTexture("speechTex", 250, 110);
-
-          g.clear();
-
-          // 뒷바퀴
-          g.fillStyle(0x222222, 1);
-          g.fillCircle(24, 66, 12);
-          g.fillStyle(0xb0bec5, 1);
-          g.fillCircle(24, 66, 5);
-
-          // 앞바퀴
-          g.fillStyle(0x222222, 1);
-          g.fillCircle(78, 66, 12);
-          g.fillStyle(0xb0bec5, 1);
-          g.fillCircle(78, 66, 5);
-
-          // 오토바이 본체
-          g.fillStyle(0xd81f2a, 1);
-          g.fillRoundedRect(28, 48, 34, 12, 6);
-
-          // 앞쪽 카울
-          g.fillStyle(0xef5350, 1);
-          g.fillTriangle(58, 48, 74, 44, 66, 60);
-
-          // 시트
-          g.fillStyle(0x3e2723, 1);
-          g.fillRoundedRect(36, 42, 18, 8, 3);
-
-          // 핸들
-          g.lineStyle(3, 0x424242, 1);
-          g.beginPath();
-          g.moveTo(68, 44);
-          g.lineTo(76, 36);
-          g.moveTo(76, 36);
-          g.lineTo(82, 38);
-          g.strokePath();
-
-          // 앞 포크
-          g.lineStyle(3, 0x616161, 1);
-          g.beginPath();
-          g.moveTo(68, 54);
-          g.lineTo(78, 62);
-          g.strokePath();
-
-          // 뒷 프레임
-          g.lineStyle(3, 0x616161, 1);
-          g.beginPath();
-          g.moveTo(38, 54);
-          g.lineTo(28, 62);
-          g.moveTo(46, 54);
-          g.lineTo(24, 66);
-          g.strokePath();
-
-          // 철가방
-          g.fillStyle(0x5f6368, 1);
-          g.fillRoundedRect(18, 24, 20, 18, 3);
-          g.fillStyle(0x9aa0a6, 1);
-          g.fillRoundedRect(21, 27, 14, 12, 2);
-          g.fillStyle(0xe8eaed, 1);
-          g.fillRect(25, 21, 6, 4);
-
-          // 라이더 몸통
-          g.fillStyle(0x1976d2, 1);
-          g.fillRoundedRect(42, 22, 16, 20, 6);
-
-          // 팔
-          g.lineStyle(4, 0x1976d2, 1);
-          g.beginPath();
-          g.moveTo(54, 28);
-          g.lineTo(68, 40);
-          g.strokePath();
-
-          // 다리
-          g.lineStyle(4, 0x263238, 1);
-          g.beginPath();
-          g.moveTo(46, 40);
-          g.lineTo(40, 54);
-          g.moveTo(54, 40);
-          g.lineTo(58, 56);
-          g.strokePath();
-
-          // 머리
-          g.fillStyle(0xf6d6a8, 1);
-          g.fillCircle(52, 14, 8);
-
-          // 헬멧
-          g.fillStyle(0xffc107, 1);
-          g.fillEllipse(52, 12, 20, 14);
-
-          // 헬멧 고글
-          g.fillStyle(0x263238, 1);
-          g.fillRoundedRect(46, 10, 12, 5, 2);
-
-          // 발판 느낌
-          g.lineStyle(3, 0x424242, 1);
-          g.beginPath();
-          g.moveTo(44, 58);
-          g.lineTo(58, 58);
-          g.strokePath();
-
-          g.generateTexture("riderTex", 96, 80);
-
-          g.clear();
-          g.fillStyle(0xd9534f, 1);
-          g.fillRoundedRect(10, 10, 70, 120, 10);
-          g.generateTexture("coneTex", 90, 140);
-
-          g.clear();
-          g.fillStyle(0x555555, 1);
-          g.fillRoundedRect(10, 10, 90, 90, 12);
-          g.generateTexture("boxTex", 110, 110);
-
-          g.clear();
-          g.fillStyle(0x9ccc65, 1);
-          g.fillRoundedRect(0, 0, 140, 120, 8);
-          g.fillStyle(0x8d6e63, 1);
-          g.fillRect(18, 48, 104, 72);
-          g.fillStyle(0xffffff, 1);
-          g.fillRect(56, 78, 28, 42);
-          g.fillStyle(0x6d4c41, 1);
-          g.fillRect(62, 82, 18, 38);
-          g.generateTexture("houseClosedTex", 140, 120);
-
-          g.clear();
-          g.fillStyle(0x9ccc65, 1);
-          g.fillRoundedRect(0, 0, 140, 120, 8);
-          g.fillStyle(0x8d6e63, 1);
-          g.fillRect(18, 48, 104, 72);
-          g.fillStyle(0xffffff, 1);
-          g.fillRect(56, 78, 28, 42);
-          g.fillStyle(0x6d4c41, 1);
-          g.fillRect(82, 82, 18, 38);
-          g.generateTexture("houseOpenTex", 140, 120);
-
-          g.clear();
-          g.fillStyle(0xb0bec5, 1);
-          g.fillRect(0, 20, 60, 120);
-          g.fillStyle(0x90a4ae, 1);
-          g.fillRect(10, 0, 80, 140);
-          g.fillStyle(0xe3f2fd, 1);
-          for (let y = 18; y < 120; y += 24) {
-            for (let x = 18; x < 70; x += 24) {
-              g.fillRect(x, y, 12, 14);
-            }
-          }
-          g.generateTexture("building1Tex", 100, 150);
-
-          g.clear();
-          g.fillStyle(0x8d6e63, 1);
-          g.fillRect(10, 10, 80, 130);
-          g.fillStyle(0xd7ccc8, 1);
-          for (let y = 20; y < 120; y += 22) {
-            g.fillRect(22, y, 16, 12);
-            g.fillRect(46, y, 16, 12);
-            g.fillRect(70, y, 16, 12);
-          }
-          g.generateTexture("building2Tex", 100, 150);
-
-          g.destroy();
-        }
-      }
-
-      class KitchenScene extends Phaser.Scene {
-        constructor() {
-          super("KitchenScene");
-        }
-
-        init(data) {
-          this.score = data.score ?? 0;
-          this.round = data.round ?? 1;
-          this.timeLeft = data.timeLeft ?? TOTAL_TIME_LIMIT;
-        }
-
-        create() {
-          this.selectedKey = null;
-          this.currentOrder = null;
-          this.burgerStack = [];
-          this.burgerSprites = [];
-          this.sideState = null;
-          this.drinkState = null;
-          this.gameStarted = false;
-          this.isGameOver = false;
-
-          this.drawBackground();
-          this.drawTopUI();
-          this.soundToggle = attachSoundToggle(
-            this,
-            SOUND_TOGGLE_RIGHT,
-            SOUND_TOGGLE_Y,
-          );
-
-          if (this.round > MAX_ROUNDS) {
-            this.endGame(true, "오늘의 10라운드를 모두 완료했어요!");
-            return;
-          }
-
-          if (this.timeLeft <= 0) {
-            this.endGame(false, "근무 시간이 끝났습니다!");
-            return;
-          }
-
-          this.drawCustomerArea();
-          this.drawOrderPanel();
-          this.drawKitchen();
-          this.drawPalette();
-
-          const isFreshStart =
-            this.round === 1 &&
-            this.score === 0 &&
-            this.timeLeft === TOTAL_TIME_LIMIT;
-
-          if (isFreshStart) {
-            this.drawStartOverlay();
-          } else {
-            this.gameStarted = true;
-            this.loadOrder();
-            GAME_AUDIO.playMusic("kitchenMusic");
-          }
-
-          this.timeEvent = this.time.addEvent({
-            delay: 1000,
-            loop: true,
-            callback: () => {
-              if (!this.gameStarted || this.isGameOver) return;
-              this.timeLeft--;
-              this.timerText.setText("남은 시간: " + this.timeLeft);
-              if (this.timeLeft <= 0) this.endGame();
-            },
-          });
-        }
-
-        drawBackground() {
-          this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            GAME_WIDTH,
-            GAME_HEIGHT,
-            0xf8e6c9,
-          );
-          this.add.rectangle(
-            GAME_WIDTH / 2,
-            95,
-            GAME_WIDTH - 28,
-            135,
-            0xffffff,
-            0.62,
-          );
-          this.add.rectangle(
-            GAME_WIDTH / 2,
-            420,
-            GAME_WIDTH - 28,
-            560,
-            0xf5dfbf,
-          );
-          this.add.rectangle(
-            GAME_WIDTH / 2,
-            1080,
-            GAME_WIDTH - 28,
-            370,
-            0xfffbf4,
-          );
-        }
-
-        drawTopUI() {
-          this.add.text(28, 24, "주니주니 패스트푸드 알바", {
-            fontSize: "33px",
-            color: "#92231d",
-            fontStyle: "bold",
-          });
-
-          this.scoreText = this.add.text(28, 68, "점수: " + this.score, {
-            fontSize: "25px",
-            color: "#5f3323",
-          });
-
-          this.roundText = this.add.text(
-            215,
-            68,
-            "라운드: " + Math.min(this.round, MAX_ROUNDS),
-            {
-              fontSize: "25px",
-              color: "#5f3323",
-            },
-          );
-
-          this.timerText = this.add.text(
-            465,
-            68,
-            "남은 시간: " + this.timeLeft,
-            {
-              fontSize: "25px",
-              color: "#5f3323",
-            },
-          );
-
-          this.selectedText = this.add.text(28, 106, "선택 재료: 없음", {
-            fontSize: "21px",
-            color: "#92231d",
-          });
-        }
-
-        drawCustomerArea() {
-          this.customer = this.add.image(82, 205, "customerTex").setScale(1.05);
-          this.speech = this.add
-            .image(250, 195, "speechTex")
-            .setScale(0.86, 0.84);
-          this.customerText = this.add
-            .text(250, 194, "주문 기다리는 중...", {
-              fontSize: "19px",
-              color: "#5f3323",
-              align: "center",
-              wordWrap: { width: 180 },
-            })
-            .setOrigin(0.5);
-        }
-
-        drawOrderPanel() {
-          this.add
-            .rectangle(180, 500, 292, 450, 0xfffbf4, 0.98)
-            .setStrokeStyle(5, 0xe2bc89);
-
-          this.add
-            .text(180, 325, "주문서", {
-              fontSize: "38px",
-              color: "#92231d",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.orderNameText = this.add
-            .text(180, 375, "", {
-              fontSize: "27px",
-              color: "#5f3323",
-              fontStyle: "bold",
-              align: "center",
-              wordWrap: { width: 230 },
-            })
-            .setOrigin(0.5);
-
-          this.add.line(70, 420, 0, 0, 220, 0, 0xe2bc89, 1).setLineWidth(3);
-
-          this.orderDetailText = this.add.text(60, 440, "", {
-            fontSize: "22px",
-            color: "#5f3323",
-            lineSpacing: 10,
-            wordWrap: { width: 240 },
-          });
-        }
-
-        drawKitchen() {
-          this.add
-            .text(516, 255, "조립대", {
-              fontSize: "40px",
-              color: "#92231d",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.add
-            .rectangle(516, 445, 330, 500, 0xf8ead3)
-            .setStrokeStyle(8, 0xc99e6f);
-
-          this.burgerArea = this.add
-            .rectangle(516, 345, 238, 195, 0xffffff, 0.58)
-            .setStrokeStyle(4, 0xd8be9e);
-          this.add
-            .text(516, 252, "버거", {
-              fontSize: "27px",
-              color: "#7a3c24",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.sideSlot = this.add
-            .rectangle(445, 525, 110, 98, 0xffffff, 0.72)
-            .setStrokeStyle(4, 0xd8be9e)
-            .setInteractive();
-          this.drinkSlot = this.add
-            .rectangle(585, 525, 110, 98, 0xffffff, 0.72)
-            .setStrokeStyle(4, 0xd8be9e)
-            .setInteractive();
-
-          this.add
-            .text(445, 590, "사이드", {
-              fontSize: "21px",
-              color: "#7a3c24",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.add
-            .text(585, 590, "음료", {
-              fontSize: "21px",
-              color: "#7a3c24",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.sideSlot.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.placeSide();
-          });
-
-          this.drinkSlot.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.placeDrink();
-          });
-
-          this.add
-            .rectangle(516, 700, 300, 98, 0xfffbf4)
-            .setStrokeStyle(4, 0xe2bc89);
-          this.add
-            .text(516, 660, "현재 버거 순서", {
-              fontSize: "25px",
-              color: "#92231d",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          this.stackText = this.add
-            .text(516, 704, "아직 아무것도 없음", {
-              fontSize: "19px",
-              color: "#5f3323",
-              align: "center",
-              wordWrap: { width: 270 },
-            })
-            .setOrigin(0.5);
-
-          const undoBtn = this.add
-            .image(392, 790, "redButton")
-            .setScale(0.72)
-            .setInteractive();
-          this.add
-            .text(392, 790, "버거 한 층 취소", {
-              fontSize: "23px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-          undoBtn.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.removeLastBurgerItem();
-          });
-
-          const resetBtn = this.add
-            .image(640, 790, "redButton")
-            .setScale(0.72)
-            .setInteractive();
-          this.add
-            .text(640, 790, "전체 취소", {
-              fontSize: "23px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-          resetBtn.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.resetTray(true);
-          });
-
-          const submitBtn = this.add
-            .image(516, 875, "redButton")
-            .setInteractive();
-          this.add
-            .text(516, 875, "주문 제출", {
-              fontSize: "33px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-          submitBtn.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.gradeTray();
-          });
-
-          this.burgerArea.setInteractive();
-          this.burgerArea.on("pointerdown", () => {
-            if (!this.gameStarted || this.isGameOver) return;
-            this.addBurgerLayer();
-          });
-        }
-
-        drawPalette() {
-          this.add
-            .rectangle(GAME_WIDTH / 2, 1085, 680, 355, 0xfffbf4, 0.98)
-            .setStrokeStyle(5, 0xe2bc89);
-          this.add
-            .text(GAME_WIDTH / 2, 940, "재료 선택", {
-              fontSize: "38px",
-              color: "#92231d",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          const keys = [
-            "bunBottom",
-            "patty",
-            "chickenPatty",
-            "cheese",
-            "lettuce",
-            "bacon",
-            "bunTop",
-
-            "ketchup",
-            "mayo",
-            "mustard",
-
-            "fries",
-            "onionRings",
-            "coke",
-            "cider",
-            "fanta",
-          ];
-
-          const positions = [
-            [96, 1008],
-            [184, 1008],
-            [272, 1008],
-            [360, 1008],
-            [448, 1008],
-            [536, 1008],
-            [624, 1008],
-
-            [180, 1110],
-            [360, 1110],
-            [540, 1110],
-
-            [92, 1220],
-            [226, 1220],
-            [360, 1220],
-            [494, 1220],
-            [628, 1220],
-          ];
-
-          this.paletteItems = [];
-          const scaleMap = {
-            bunBottom: 0.34,
-            patty: 0.34,
-            chickenPatty: 0.34,
-            cheese: 0.34,
-            lettuce: 0.34,
-            bunTop: 0.34,
-            bacon: 0.36,
-            ketchup: 0.4,
-            mayo: 0.4,
-            mustard: 0.4,
-            fries: 0.42,
-            onionRings: 0.42,
-            coke: 0.42,
-            cider: 0.42,
-            fanta: 0.42,
-          };
-
-          keys.forEach((key, i) => {
-            const [x, y] = positions[i];
-            const card = this.add
-              .rectangle(x, y, 84, 76, 0xffffff, 1)
-              .setStrokeStyle(4, 0xe2bc89)
-              .setInteractive();
-
-            this.add
-              .image(x, y - 8, INGREDIENTS[key].texture)
-              .setScale(scaleMap[key]);
-            this.add
-              .text(x, y + 24, INGREDIENTS[key].name, {
-                fontSize: "12px",
-                color: "#5f3323",
-                fontStyle: "bold",
-                align: "center",
-                wordWrap: { width: 76 },
-              })
-              .setOrigin(0.5);
-
-            card.on("pointerdown", () => {
-              if (!this.gameStarted || this.isGameOver) return;
-              this.selectIngredient(key);
-            });
-
-            this.paletteItems.push({ key, card });
-          });
-
-          this.selectOutline = this.add
-            .rectangle(74, 1008, 92, 84)
-            .setStrokeStyle(6, 0xd81f2a)
-            .setVisible(false);
-        }
-
-        drawStartOverlay() {
-          this.startOverlay = this.add.container(0, 0);
-
-          const bg = this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            GAME_WIDTH,
-            GAME_HEIGHT,
-            0x000000,
-            0.35,
-          );
-
-          const panel = this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            590,
-            720,
-            0xfffbf4,
-            0.98,
-          );
-          panel.setStrokeStyle(6, 0xd81f2a);
-
-          const title = this.add
-            .text(GAME_WIDTH / 2, 345, "주니주니 패스트푸드 알바", {
-              fontSize: "44px",
-              color: "#b01d25",
-              fontStyle: "bold",
-              align: "center",
-            })
-            .setOrigin(0.5);
-
-          const desc = this.add
-            .text(
-              GAME_WIDTH / 2,
-              515,
-              `랜덤 주문을 보고\n버거, 사이드, 음료를 제조하세요.\n\n총 ${MAX_ROUNDS}라운드를 ${TOTAL_TIME_LIMIT}초 안에\n완료하면 오늘 알바 성공!`,
-              {
-                fontSize: "29px",
-                color: "#5f3323",
-                align: "center",
-                lineSpacing: 12,
-              },
-            )
-            .setOrigin(0.5);
-
-          const startBtn = this.add
-            .rectangle(GAME_WIDTH / 2, 800, 300, 90, 0xd81f2a)
-            .setInteractive({ useHandCursor: true });
-
-          const startText = this.add
-            .text(GAME_WIDTH / 2, 800, "출근하기", {
-              fontSize: "38px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          startBtn.on("pointerdown", () => this.startGame());
-
-          this.startOverlay.add([bg, panel, title, desc, startBtn, startText]);
-        }
-
-        startGame() {
-          GAME_AUDIO.unlock();
-          GAME_AUDIO.play("deliveryStart", { volume: 0.2, rateJitter: 0.03 });
-          GAME_AUDIO.playMusic("kitchenMusic");
-          this.gameStarted = true;
-          this.startOverlay.setVisible(false);
-          this.loadOrder();
-        }
-
-        selectIngredient(key) {
-          GAME_AUDIO.play("uiSelect", { volume: 0.62, rateJitter: 0.03 });
-          this.selectedKey = key;
-          const item = this.paletteItems.find((v) => v.key === key);
-          this.selectOutline
-            .setPosition(item.card.x, item.card.y)
-            .setVisible(true);
-          this.selectedText.setText("선택 재료: " + INGREDIENTS[key].name);
-
-          const category = INGREDIENTS[key].category;
-          if (category === "burger")
-            this.showToast("버거 영역을 눌러 순서대로 추가");
-          else if (category === "side") this.showToast("사이드 칸을 눌러 배치");
-          else this.showToast("음료 칸을 눌러 배치");
-        }
-
-        addBurgerLayer() {
-          if (!this.selectedKey)
-            return this.showToast("먼저 재료를 선택하세요");
-          if (INGREDIENTS[this.selectedKey].category !== "burger")
-            return this.showToast("버거 재료만 넣을 수 있어요");
-          if (this.burgerStack.length >= 10)
-            return this.showToast("버거가 너무 높아요!");
-
-          const key = this.selectedKey;
-          this.burgerStack.push(key);
-          const y = 420 - (this.burgerStack.length - 1) * 16;
-          const sprite = this.add
-            .image(516, y, INGREDIENTS[key].texture)
-            .setScale(0.6);
-          this.burgerSprites.push(sprite);
-          this.updateStackText();
-          GAME_AUDIO.play("stack", { volume: 0.76, rateJitter: 0.05 });
-          this.showToast(INGREDIENTS[key].name + " 추가!");
-        }
-
-        removeLastBurgerItem() {
-          if (this.burgerStack.length === 0)
-            return this.showToast("버거에 아무것도 없어요");
-          this.burgerStack.pop();
-          const sprite = this.burgerSprites.pop();
-          if (sprite) sprite.destroy();
-          this.updateStackText();
-          GAME_AUDIO.play("cancel", { volume: 0.6, rateJitter: 0.04 });
-        }
-
-        placeSide() {
-          if (!this.selectedKey)
-            return this.showToast("먼저 재료를 선택하세요");
-          if (INGREDIENTS[this.selectedKey].category !== "side")
-            return this.showToast("사이드 칸에는 사이드만!");
-          if (this.sideState?.sprite) this.sideState.sprite.destroy();
-          this.sideState = {
-            key: this.selectedKey,
-            sprite: this.add
-              .image(445, 525, INGREDIENTS[this.selectedKey].texture)
-              .setScale(0.58),
-          };
-          GAME_AUDIO.play("trayPlace", { volume: 0.72, rateJitter: 0.04 });
-          this.showToast("사이드 배치 완료");
-        }
-
-        placeDrink() {
-          if (!this.selectedKey)
-            return this.showToast("먼저 재료를 선택하세요");
-          if (INGREDIENTS[this.selectedKey].category !== "drink")
-            return this.showToast("음료 칸에는 음료만!");
-          if (this.drinkState?.sprite) this.drinkState.sprite.destroy();
-          this.drinkState = {
-            key: this.selectedKey,
-            sprite: this.add
-              .image(585, 525, INGREDIENTS[this.selectedKey].texture)
-              .setScale(0.58),
-          };
-          GAME_AUDIO.play("trayPlace", { volume: 0.76, rateJitter: 0.04 });
-          this.showToast("음료 배치 완료");
-        }
-
-        updateStackText() {
-          if (this.burgerStack.length === 0)
-            return this.stackText.setText("아직 아무것도 없음");
-          this.stackText.setText(
-            this.burgerStack.map((k) => INGREDIENTS[k].name).join(" > "),
-          );
-        }
-
-        loadOrder() {
-          this.resetTray(false);
-          this.currentOrder = generateRandomOrder(this.round);
-          this.orderNameText.setText(this.currentOrder.title);
-          this.orderDetailText.setText(this.currentOrder.tips.join("\n\n"));
-
-          const bubbleLines = [
-            "안녕하세요!",
-            this.currentOrder.title + "랑",
-            ingredientName(this.currentOrder.side) + "이랑",
-            ingredientName(this.currentOrder.drink) + " 주세요!",
-          ];
-          this.customerText.setText(bubbleLines.join("\n"));
-        }
-
-        resetTray(withSound = false) {
-          this.burgerStack = [];
-          this.burgerSprites.forEach((s) => s.destroy());
-          this.burgerSprites = [];
-          this.updateStackText();
-
-          if (this.sideState?.sprite) this.sideState.sprite.destroy();
-          if (this.drinkState?.sprite) this.drinkState.sprite.destroy();
-          this.sideState = null;
-          this.drinkState = null;
-
-          if (withSound) {
-            GAME_AUDIO.play("cancel", { volume: 0.62, rateJitter: 0.04 });
-          }
-        }
-
-        gradeTray() {
-          const order = this.currentOrder;
-
-          const burgerPerfect =
-            JSON.stringify(this.burgerStack) === JSON.stringify(order.burger);
-          const sideCorrect =
-            this.sideState && this.sideState.key === order.side;
-          const drinkCorrect =
-            this.drinkState && this.drinkState.key === order.drink;
-
-          if (!burgerPerfect) {
-            GAME_AUDIO.play("fail", { volume: 0.78, rateJitter: 0.03 });
-            return this.showKitchenResult(
-              0,
-              "주문 실패!",
-              false,
-              "버거 구성이 주문서와 달라요!",
-            );
-          }
-
-          if (!sideCorrect) {
-            GAME_AUDIO.play("fail", { volume: 0.78, rateJitter: 0.03 });
-            return this.showKitchenResult(
-              0,
-              "주문 실패!",
-              false,
-              "사이드를 잘못 골랐어요!",
-            );
-          }
-
-          if (!drinkCorrect) {
-            GAME_AUDIO.play("fail", { volume: 0.78, rateJitter: 0.03 });
-            return this.showKitchenResult(
-              0,
-              "주문 실패!",
-              false,
-              "음료를 잘못 골랐어요!",
-            );
-          }
-
-          const total = order.burger.length * 25 + 40 + 40 + 50;
-
-          this.score += total;
-          this.scoreText.setText("점수: " + this.score);
-          GAME_AUDIO.play("success", { volume: 0.82, rateJitter: 0.02 });
-          this.showKitchenResult(
-            total,
-            "주문 성공!",
-            true,
-            "주문서를 완벽하게 맞췄어요!",
-          );
-        }
-
-        showKitchenResult(total, message, success, detailText = "") {
-          UI_MODAL.show({
-            title: message,
-            summary: success ? `획득 점수: ${total}` : "이번 주문은 다시 확인해요!",
-            detail:
-              detailText ||
-              (success ? "배달하러 출발!" : "주문서를 다시 보고 맞춰보세요."),
-            buttonLabel: success ? "배달 가기" : "다시 만들기",
-            accent: success ? "#0b8f4d" : "#d81f2a",
-            onPrimary: () => {
-              if (success) {
-                GAME_AUDIO.play("deliveryStart", {
-                  volume: 0.8,
-                  rateJitter: 0.03,
-                });
-                this.scene.start("DeliveryScene", {
-                  score: this.score,
-                  round: this.round,
-                  timeLeft: this.timeLeft,
-                });
-              }
-            },
-          });
-        }
-
-        showToast(message) {
-          if (this.toastText) this.toastText.destroy();
-          this.toastText = this.add
-            .text(GAME_WIDTH / 2, 925, message, {
-              fontSize: "25px",
-              color: "#fff",
-              backgroundColor: "#92231ddd",
-              padding: { left: 16, right: 16, top: 10, bottom: 10 },
-            })
-            .setOrigin(0.5);
-
-          this.tweens.add({
-            targets: this.toastText,
-            alpha: 0,
-            y: 895,
-            duration: 850,
-            onComplete: () => {
-              if (this.toastText) {
-                this.toastText.destroy();
-                this.toastText = null;
-              }
-            },
-          });
-        }
-
-        endGame(clearedAllRounds = false, detailMessage = "") {
-          if (this.isGameOver) return;
-          this.isGameOver = true;
-
-          if (this.timeEvent) this.timeEvent.remove(false);
-
-          GAME_AUDIO.stopMusic();
-          GAME_AUDIO.play(clearedAllRounds ? "win" : "fail", {
-            volume: clearedAllRounds ? 0.9 : 0.72,
-            rateJitter: 0.02,
-          });
-
-          const completedRounds = getCompletedRounds(this.round);
-          const salary = calculateSalary(completedRounds);
-
-          if (!clearedAllRounds) {
-            UI_MODAL.show({
-              title: "근무 종료!",
-              summary: `최종 점수: ${this.score}`,
-              detail:
-                detailMessage ||
-                `근무 시간이 종료되어 오늘 근무를 마감했어요.
-완료 라운드 ${completedRounds} / ${MAX_ROUNDS}
-오늘 알바비 ${formatWon(salary)}`,
-              buttonLabel: "다시 시작",
-              accent: "#d81f2a",
-              onPrimary: () => {
-                GAME_AUDIO.play("uiSelect", {
-                  volume: 0.72,
-                  rateJitter: 0.02,
-                });
-                this.scene.start("KitchenScene", {
-                  score: 0,
-                  round: 1,
-                  timeLeft: TOTAL_TIME_LIMIT,
-                });
-              },
-            });
-            return;
-          }
-
-          const bg = this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            GAME_WIDTH,
-            GAME_HEIGHT,
-            0x000000,
-            0.45,
-          );
-          const panel = this.add.rectangle(
-            GAME_WIDTH / 2,
-            GAME_HEIGHT / 2,
-            560,
-            500,
-            0xfffbf4,
-            0.98,
-          );
-          panel.setStrokeStyle(6, 0x0b8f4d);
-
-          const title = this.add
-            .text(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 - 128,
-              "오늘도 만점 알바!",
-              {
-                fontSize: "52px",
-                color: "#0b8f4d",
-                fontStyle: "bold",
-                align: "center",
-              },
-            )
-            .setOrigin(0.5);
-
-          const score = this.add
-            .text(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 - 48,
-              "최종 점수: " + this.score,
-              {
-                fontSize: "34px",
-                color: "#5f3323",
-                fontStyle: "bold",
-              },
-            )
-            .setOrigin(0.5);
-
-          const round = this.add
-            .text(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 + 8,
-              `완료 라운드: ${completedRounds} / ${MAX_ROUNDS}`,
-              {
-                fontSize: "30px",
-                color: "#6a3c2b",
-                fontStyle: "bold",
-              },
-            )
-            .setOrigin(0.5);
-
-          const pay = this.add
-            .text(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 + 64,
-              `오늘 알바비: ${formatWon(salary)}`,
-              {
-                fontSize: "38px",
-                color: "#0b8f4d",
-                fontStyle: "bold",
-              },
-            )
-            .setOrigin(0.5);
-
-          const desc = this.add
-            .text(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 + 126,
-              detailMessage ||
-                `라운드당 ${formatWon(ROUND_PAY)} 지급!
-햄버거 제조와 배달을 모두 끝낸 라운드만 인정됩니다.`,
-              {
-                fontSize: "24px",
-                color: "#5f3323",
-                align: "center",
-                wordWrap: { width: 470 },
-                lineSpacing: 8,
-              },
-            )
-            .setOrigin(0.5);
-
-          const btn = this.add
-            .rectangle(
-              GAME_WIDTH / 2,
-              GAME_HEIGHT / 2 + 206,
-              300,
-              90,
-              0x0b8f4d,
-            )
-            .setInteractive({ useHandCursor: true });
-          const btnText = this.add
-            .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 206, "다시 시작", {
-              fontSize: "36px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5);
-
-          btn.on("pointerdown", () =>
-            this.scene.start("KitchenScene", {
-              score: 0,
-              round: 1,
-              timeLeft: TOTAL_TIME_LIMIT,
-            }),
-          );
-        }
-      }
-
-      class DeliveryScene extends Phaser.Scene {
-        constructor() {
-          super("DeliveryScene");
-        }
-
-        init(data) {
-          this.score = data.score ?? 0;
-          this.round = data.round ?? 1;
-          this.timeLeft = data.timeLeft ?? TOTAL_TIME_LIMIT;
-        }
-
-        create() {
-          this.deliveryOver = false;
-          this.gameStarted = false;
-
-          this.depths = {
-            background: 0,
-            pipes: 10,
-            riderShadow: 15,
-            rider: 20,
-            hud: 100,
-            button: 120,
-            message: 140,
-          };
-
-          GAME_AUDIO.playMusic("deliveryMusic");
-
-          this.passedPipes = 0;
-          this.targetPipes = getPipeTarget(this.round);
-
-          this.pipeGap = Math.max(250, 340 - (this.round - 1) * 8);
-          this.pipeSpeed = Math.min(330, 220 + (this.round - 1) * 10);
-          this.pipeSpacing = 360 + Math.max(0, this.round - 1) * 8;
-          this.gravityForce = 900;
-          this.jumpVelocity = -370;
-
-          this.safeGapTop = 250;
-          this.safeGapBottom = 980;
-          this.maxGapCenterRise = Math.round(this.pipeSpacing * 0.82);
-          this.maxGapCenterDrop = Math.round(this.pipeSpacing * 0.98);
-          this.firstGapCenter = Phaser.Math.Clamp(
-            560 + Phaser.Math.Between(-110, 110),
-            this.safeGapTop,
-            this.safeGapBottom,
-          );
-
-          this.drawSkyBackground();
-          this.drawFlappyHUD();
-          this.soundToggle = attachSoundToggle(
-            this,
-            SOUND_TOGGLE_RIGHT,
-            SOUND_TOGGLE_Y,
-          );
-          this.createRider();
-          this.createPipeGroups();
-          this.createControls();
-          this.createAllPipePairs();
-
-          this.deliveryTimer = this.time.addEvent({
-            delay: 1000,
-            loop: true,
-            callback: () => {
-              if (this.deliveryOver) return;
-              this.timeLeft--;
-              this.updateHUD();
-              if (this.timeLeft <= 0) this.timeoutShift();
-            },
-          });
-
-          this.input.on("pointerdown", () => this.flap());
-          this.spaceKey = this.input.keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.SPACE,
-          );
-          this.upKey = this.input.keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.UP,
-          );
-
-          this.showCenterMessage("화면을 탭해서 배달 출발!");
-        }
-
-        drawSkyBackground() {
-          this.backgroundScrollers = [];
-
-          const addScroller = (sprite, speed) => {
-            this.backgroundScrollers.push({ sprite, speed });
-            return sprite;
-          };
-
-          const makeSkyGradientTexture = () => {
-            const key = "deliverySkyPremiumTex";
-            if (!this.textures.exists(key)) {
-              const texture = this.textures.createCanvas(
-                key,
-                GAME_WIDTH,
-                GAME_HEIGHT,
-              );
-              const ctx = texture.getContext();
-
-              const sky = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-              sky.addColorStop(0, "#93d8ff");
-              sky.addColorStop(0.34, "#bfeeff");
-              sky.addColorStop(0.66, "#ffe6b3");
-              sky.addColorStop(1, "#f2b66f");
-              ctx.fillStyle = sky;
-              ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-              const glow = ctx.createRadialGradient(560, 210, 12, 560, 210, 260);
-              glow.addColorStop(0, "rgba(255, 255, 255, 0.88)");
-              glow.addColorStop(0.34, "rgba(255, 235, 164, 0.42)");
-              glow.addColorStop(1, "rgba(255, 214, 125, 0)");
-              ctx.fillStyle = glow;
-              ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-              const haze = ctx.createLinearGradient(0, 520, 0, 920);
-              haze.addColorStop(0, "rgba(255, 255, 255, 0)");
-              haze.addColorStop(0.56, "rgba(255, 255, 255, 0.28)");
-              haze.addColorStop(1, "rgba(255, 250, 230, 0.06)");
-              ctx.fillStyle = haze;
-              ctx.fillRect(0, 520, GAME_WIDTH, 420);
-
-              texture.refresh();
-            }
-            return key;
-          };
-
-          const makeSoftCloudTexture = () => {
-            const key = "deliverySoftCloudTex";
-            if (!this.textures.exists(key)) {
-              const g = this.make.graphics({ x: 0, y: 0, add: false });
-              g.fillStyle(0xffffff, 0.92);
-              g.fillEllipse(64, 52, 92, 46);
-              g.fillEllipse(125, 42, 86, 54);
-              g.fillEllipse(190, 54, 112, 46);
-              g.fillEllipse(242, 60, 76, 34);
-              g.fillStyle(0xd9f2ff, 0.32);
-              g.fillEllipse(122, 66, 198, 24);
-              g.fillEllipse(212, 72, 120, 18);
-              g.generateTexture(key, 300, 110);
-              g.destroy();
-            }
-            return key;
-          };
-
-          const makeMountainTexture = () => {
-            const key = "deliveryMountainTileTex";
-            if (!this.textures.exists(key)) {
-              const g = this.make.graphics({ x: 0, y: 0, add: false });
-              g.fillStyle(0x9fc5cf, 0.52);
-              g.beginPath();
-              g.moveTo(0, 220);
-              g.lineTo(120, 82);
-              g.lineTo(250, 220);
-              g.lineTo(360, 112);
-              g.lineTo(520, 220);
-              g.lineTo(680, 92);
-              g.lineTo(840, 220);
-              g.lineTo(960, 128);
-              g.lineTo(960, 260);
-              g.lineTo(0, 260);
-              g.closePath();
-              g.fillPath();
-
-              g.fillStyle(0xe7f9ff, 0.38);
-              g.fillTriangle(96, 110, 120, 82, 154, 118);
-              g.fillTriangle(646, 120, 680, 92, 716, 126);
-              g.fillTriangle(932, 150, 960, 128, 960, 176);
-              g.generateTexture(key, 960, 260);
-              g.destroy();
-            }
-            return key;
-          };
-
-          const makeSkylineTexture = (key, palette, alpha = 1) => {
-            if (this.textures.exists(key)) return key;
-
-            const g = this.make.graphics({ x: 0, y: 0, add: false });
-            const width = 960;
-            const height = 340;
-            const buildings = [
-              [12, 160, 72, 170],
-              [96, 102, 86, 228],
-              [198, 138, 62, 192],
-              [276, 70, 94, 260],
-              [390, 124, 78, 206],
-              [486, 92, 108, 238],
-              [616, 150, 68, 180],
-              [700, 84, 96, 246],
-              [814, 118, 72, 212],
-              [900, 142, 74, 188],
-            ];
-
-            buildings.forEach(([x, y, w, h], i) => {
-              const color = palette[i % palette.length];
-              g.fillStyle(color, alpha);
-              g.fillRoundedRect(x, y, w, h, 10);
-              g.fillStyle(0xffffff, alpha * 0.26);
-              for (let yy = y + 22; yy < y + h - 24; yy += 32) {
-                for (let xx = x + 14; xx < x + w - 14; xx += 24) {
-                  if ((xx + yy + i * 7) % 5 !== 0) {
-                    g.fillRoundedRect(xx, yy, 12, 14, 3);
-                  }
-                }
-              }
-              g.fillStyle(0x455a64, alpha * 0.28);
-              g.fillRect(x + w * 0.2, y - 8, w * 0.34, 8);
-            });
-
-            g.fillStyle(0xffffff, 0.16);
-            g.fillRect(0, 296, width, 10);
-            g.generateTexture(key, width, height);
-            g.destroy();
-            return key;
-          };
-
-          const makeStorefrontTexture = () => {
-            const key = "deliveryStorefrontTileTex";
-            if (this.textures.exists(key)) return key;
-
-            const g = this.make.graphics({ x: 0, y: 0, add: false });
-            const shops = [
-              { x: 0, w: 180, c: 0xf7c8a0, awning: 0xd81f2a, sign: "FAST" },
-              { x: 180, w: 170, c: 0xb9d9c4, awning: 0x2f80ed, sign: "MART" },
-              { x: 350, w: 210, c: 0xf5d58b, awning: 0xf57c00, sign: "CAFE" },
-              { x: 560, w: 170, c: 0xc8d6e5, awning: 0x0b8f4d, sign: "PARK" },
-              { x: 730, w: 230, c: 0xe7c6ff, awning: 0x8e44ad, sign: "HOME" },
-            ];
-
-            shops.forEach((shop, i) => {
-              g.fillStyle(shop.c, 0.9);
-              g.fillRoundedRect(shop.x + 8, 54, shop.w - 16, 190, 12);
-              g.fillStyle(0xffffff, 0.36);
-              g.fillRoundedRect(shop.x + 28, 76, shop.w - 56, 42, 8);
-              g.fillStyle(shop.awning, 0.86);
-              g.fillRoundedRect(shop.x + 16, 124, shop.w - 32, 34, 8);
-              g.fillStyle(0xffffff, 0.88);
-              for (let sx = shop.x + 26; sx < shop.x + shop.w - 28; sx += 36) {
-                g.fillTriangle(sx, 158, sx + 18, 158, sx + 9, 178);
-              }
-              g.fillStyle(0x5d4037, 0.38);
-              g.fillRoundedRect(shop.x + 34, 178, 42, 66, 6);
-              g.fillStyle(0xe3f2fd, 0.68);
-              g.fillRoundedRect(shop.x + shop.w - 88, 178, 52, 44, 6);
-              g.fillStyle(0xffffff, 0.56);
-              g.fillRect(shop.x + shop.w - 82, 186, 40, 4);
-
-              // 작은 간판 느낌은 텍스처에 직접 글자를 넣지 않고 패널과 줄만 그려
-              // 배경이 과하게 읽히지 않도록 한다.
-              g.fillStyle(0x3e2723, 0.2 + i * 0.018);
-              g.fillRoundedRect(shop.x + 42, 88, shop.w - 84, 12, 6);
-            });
-
-            // 가로수와 가로등
-            for (let x = 62; x < 960; x += 160) {
-              g.fillStyle(0x6d4c41, 0.62);
-              g.fillRoundedRect(x, 190, 12, 60, 4);
-              g.fillStyle(0x4caf50, 0.68);
-              g.fillCircle(x + 6, 178, 26);
-              g.fillCircle(x - 12, 188, 18);
-              g.fillCircle(x + 24, 190, 18);
-            }
-            for (let x = 130; x < 960; x += 240) {
-              g.lineStyle(5, 0x4d6470, 0.48);
-              g.beginPath();
-              g.moveTo(x, 246);
-              g.lineTo(x, 152);
-              g.lineTo(x + 34, 142);
-              g.strokePath();
-              g.fillStyle(0xfff3b0, 0.62);
-              g.fillCircle(x + 40, 142, 10);
-            }
-
-            g.generateTexture(key, 960, 260);
-            g.destroy();
-            return key;
-          };
-
-          const makeSidewalkTexture = () => {
-            const key = "deliverySidewalkTileTex";
-            if (this.textures.exists(key)) return key;
-
-            const g = this.make.graphics({ x: 0, y: 0, add: false });
-            g.fillStyle(0xd8c9b4, 1);
-            g.fillRect(0, 0, 960, 120);
-            g.fillStyle(0xf5ead9, 0.82);
-            g.fillRect(0, 0, 960, 18);
-            g.lineStyle(2, 0xb8a591, 0.42);
-            for (let x = -40; x < 1000; x += 96) {
-              g.beginPath();
-              g.moveTo(x, 18);
-              g.lineTo(x + 48, 120);
-              g.strokePath();
-            }
-            g.lineStyle(2, 0xb8a591, 0.32);
-            for (let y = 44; y < 120; y += 34) {
-              g.beginPath();
-              g.moveTo(0, y);
-              g.lineTo(960, y);
-              g.strokePath();
-            }
-            g.generateTexture(key, 960, 120);
-            g.destroy();
-            return key;
-          };
-
-          const makeRoadTexture = () => {
-            const key = "deliveryRoadPremiumTex";
-            if (this.textures.exists(key)) return key;
-
-            const g = this.make.graphics({ x: 0, y: 0, add: false });
-            g.fillStyle(0x4f5b62, 1);
-            g.fillRect(0, 0, 960, 260);
-            g.fillStyle(0x64727b, 0.65);
-            g.fillRect(0, 0, 960, 32);
-            g.fillStyle(0x37474f, 0.58);
-            g.fillRect(0, 212, 960, 48);
-
-            g.lineStyle(2, 0x78909c, 0.2);
-            for (let y = 58; y < 240; y += 38) {
-              g.beginPath();
-              g.moveTo(0, y);
-              g.lineTo(960, y + 18);
-              g.strokePath();
-            }
-
-            g.fillStyle(0xffffff, 0.46);
-            for (let x = 24; x < 960; x += 132) {
-              g.fillRoundedRect(x, 88, 76, 10, 5);
-            }
-            g.fillStyle(0xffe082, 0.72);
-            for (let x = 0; x < 960; x += 122) {
-              g.fillRoundedRect(x + 18, 152, 64, 9, 5);
-            }
-            g.generateTexture(key, 960, 260);
-            g.destroy();
-            return key;
-          };
-
-          this.add
-            .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, makeSkyGradientTexture())
-            .setDepth(-30);
-
-          // 햇빛과 얇은 대기감: 장애물과 라이더는 또렷하게 보이도록 낮은 알파만 사용.
-          this.add.circle(560, 210, 42, 0xfff7c2, 0.78).setDepth(-29);
-          this.add.circle(560, 210, 72, 0xfff0a5, 0.18).setDepth(-29);
-
-          const cloudKey = makeSoftCloudTexture();
-          addScroller(
-            this.add
-              .tileSprite(GAME_WIDTH / 2, 130, GAME_WIDTH, 120, cloudKey)
-              .setAlpha(0.72)
-              .setDepth(-28),
-            0.1,
-          );
-          addScroller(
-            this.add
-              .tileSprite(GAME_WIDTH / 2, 245, GAME_WIDTH, 120, cloudKey)
-              .setAlpha(0.5)
-              .setScale(1.18, 1)
-              .setDepth(-27),
-            0.18,
-          );
-
-          addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                610,
-                GAME_WIDTH,
-                260,
-                makeMountainTexture(),
-              )
-              .setAlpha(0.72)
-              .setDepth(-26),
-            0.16,
-          );
-
-          addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                710,
-                GAME_WIDTH,
-                340,
-                makeSkylineTexture(
-                  "deliveryFarCityTileTex",
-                  [0x8db5c4, 0x9bc2cf, 0x86aebe, 0xa7cbd2],
-                  0.72,
-                ),
-              )
-              .setAlpha(0.62)
-              .setDepth(-24),
-            0.32,
-          );
-
-          addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                830,
-                GAME_WIDTH,
-                340,
-                makeSkylineTexture(
-                  "deliveryNearCityTileTex",
-                  [0x7f9aaa, 0x8da8b5, 0x7891a0, 0x93aeb8],
-                  0.86,
-                ),
-              )
-              .setAlpha(0.5)
-              .setDepth(-22),
-            0.55,
-          );
-
-          this.add
-            .rectangle(GAME_WIDTH / 2, 815, GAME_WIDTH, 280, 0xffffff, 0.18)
-            .setDepth(-21);
-
-          addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                925,
-                GAME_WIDTH,
-                260,
-                makeStorefrontTexture(),
-              )
-              .setAlpha(0.72)
-              .setDepth(-18),
-            1.05,
-          );
-
-          addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                1038,
-                GAME_WIDTH,
-                120,
-                makeSidewalkTexture(),
-              )
-              .setDepth(-14),
-            2.4,
-          );
-
-          this.ground = this.add
-            .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 92, GAME_WIDTH, 184, 0x455a64)
-            .setDepth(-13);
-
-          this.groundStripe = addScroller(
-            this.add
-              .tileSprite(
-                GAME_WIDTH / 2,
-                GAME_HEIGHT - 84,
-                GAME_WIDTH,
-                260,
-                makeRoadTexture(),
-              )
-              .setDepth(-12),
-            6.8,
-          );
-
-          // 아래쪽 은은한 그라데이션은 버튼 영역과 도로를 분리해 조작감을 살린다.
-          this.add
-            .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 8, GAME_WIDTH, 46, 0x263238, 0.24)
-            .setDepth(-11);
-        }
-
-        drawFlappyHUD() {
-          this.hudPanel = this.add
-            .rectangle(
-              GAME_WIDTH / 2,
-              86,
-              GAME_WIDTH - 28,
-              130,
-              0xffffff,
-              0.72,
-            )
-            .setDepth(this.depths.hud);
-
-          this.titleText = this.add
-            .text(28, 22, "배달 레이스", {
-              fontSize: "34px",
-              color: "#92231d",
-              fontStyle: "bold",
-            })
-            .setDepth(this.depths.hud);
-
-          this.progressText = this.add
-            .text(28, 64, "", {
-              fontSize: "25px",
-              color: "#5f3323",
-              fontStyle: "bold",
-            })
-            .setDepth(this.depths.hud);
-
-          this.descText = this.add
-            .text(28, 100, "기둥 사이를 통과해 배달하세요", {
-              fontSize: "21px",
-              color: "#7a3c24",
-            })
-            .setDepth(this.depths.hud);
-
-          this.tipText = this.add
-            .text(470, 64, "보너스: 0", {
-              fontSize: "24px",
-              color: "#5f3323",
-              fontStyle: "bold",
-            })
-            .setDepth(this.depths.hud);
-
-          this.timeText = this.add
-            .text(470, 100, "", {
-              fontSize: "22px",
-              color: "#7a3c24",
-              fontStyle: "bold",
-            })
-            .setDepth(this.depths.hud);
-
-          this.progressBarBg = this.add
-            .rectangle(28, 146, 664, 18, 0xe8d3b5)
-            .setOrigin(0, 0.5)
-            .setDepth(this.depths.hud);
-          this.progressBar = this.add
-            .rectangle(28, 146, 2, 18, 0x0b8f4d)
-            .setOrigin(0, 0.5)
-            .setDepth(this.depths.hud);
-
-          this.deliveryBonus = 0;
-          this.updateHUD();
-        }
-
-        updateHUD() {
-          this.progressText.setText(
-            `배달 진행: ${this.passedPipes} / ${this.targetPipes}`,
-          );
-          this.tipText.setText(`보너스: ${this.deliveryBonus}`);
-          this.timeText.setText(`남은 시간: ${Math.max(0, this.timeLeft)}초`);
-          this.progressBar.width = 664 * (this.passedPipes / this.targetPipes);
-        }
-
-        createRider() {
-          this.rider = this.physics.add
-            .image(180, 560, "riderTex")
-            .setScale(1.2)
-            .setDepth(this.depths.rider);
-          this.rider.setCollideWorldBounds(false);
-          this.rider.body.setAllowGravity(false);
-          this.rider.body.setSize(52, 52);
-          this.rider.body.setOffset(22, 20);
-
-          this.riderShadow = this.add
-            .ellipse(
-              185,
-              1095,
-              110,
-              28,
-              0x000000,
-              0.12,
-            )
-            .setDepth(this.depths.riderShadow);
-
-          this.idleTween = this.tweens.add({
-            targets: this.rider,
-            y: this.rider.y - 12,
-            duration: 620,
-            yoyo: true,
-            repeat: -1,
-            ease: "Sine.easeInOut",
-          });
-        }
-
-        createPipeGroups() {
-          this.pipes = this.physics.add.group();
-          this.scoreZones = this.physics.add.group();
-
-          this.physics.add.overlap(
-            this.rider,
-            this.scoreZones,
-            this.passGate,
-            null,
-            this,
-          );
-          this.physics.add.collider(
-            this.rider,
-            this.pipes,
-            this.hitPipe,
-            null,
-            this,
-          );
-        }
-
-        createControls() {
-          const flapBtn = this.add
-            .rectangle(GAME_WIDTH / 2, 1170, 300, 92, 0xd81f2a, 0.94)
-            .setInteractive({ useHandCursor: true })
-            .setDepth(this.depths.button);
-
-          this.add
-            .text(GAME_WIDTH / 2, 1170, "점프", {
-              fontSize: "40px",
-              color: "#fff",
-              fontStyle: "bold",
-            })
-            .setOrigin(0.5)
-            .setDepth(this.depths.button);
-
-          flapBtn.on("pointerdown", () => this.flap());
-        }
-
-        flap() {
-          if (this.deliveryOver) return;
-
-          GAME_AUDIO.unlock();
-
-          if (!this.gameStarted) {
-            this.gameStarted = true;
-            if (this.centerMessage) this.centerMessage.destroy();
-
-            if (this.idleTween) {
-              this.idleTween.stop();
-              this.idleTween = null;
-            }
-
-            this.rider.body.setAllowGravity(true);
-            this.rider.body.setGravityY(this.gravityForce);
-            this.rider.body.setVelocityY(0);
-            this.startObstacleMotion();
-          }
-
-          this.rider.setVelocityY(this.jumpVelocity);
-          this.rider.setAngle(-18);
-          GAME_AUDIO.play("flap", { volume: 0.7, rateJitter: 0.06 });
-
-          this.tweens.add({
-            targets: this.rider,
-            angle: 10,
-            duration: 260,
-            ease: "Quad.Out",
-          });
-        }
-
-        createAllPipePairs() {
-          const startX = GAME_WIDTH + 120;
-          let previousGapCenter = this.firstGapCenter;
-
-          for (let i = 0; i < this.targetPipes; i++) {
-            const x = startX + i * this.pipeSpacing;
-            const gapCenter = this.getNextGapCenter(i, previousGapCenter);
-            this.spawnPipePair(x, false, gapCenter);
-            previousGapCenter = gapCenter;
-          }
-        }
-
-        getNextGapCenter(index, previousGapCenter) {
-          if (index === 0) return this.firstGapCenter;
-
-          const minCenter = Math.max(
-            this.safeGapTop,
-            previousGapCenter - this.maxGapCenterRise,
-          );
-          const maxCenter = Math.min(
-            this.safeGapBottom,
-            previousGapCenter + this.maxGapCenterDrop,
-          );
-
-          if (minCenter >= maxCenter) {
-            return Phaser.Math.Clamp(
-              previousGapCenter,
-              this.safeGapTop,
-              this.safeGapBottom,
-            );
-          }
-
-          return Phaser.Math.Between(minCenter, maxCenter);
-        }
-
-        spawnPipePair(x, startMoving = true, gapCenter = null) {
-          const resolvedGapCenter = Phaser.Math.Clamp(
-            gapCenter ?? this.firstGapCenter,
-            this.safeGapTop,
-            this.safeGapBottom,
-          );
-          const gapHalf = this.pipeGap / 2;
-
-          const topHeight = resolvedGapCenter - gapHalf;
-          const bottomY = resolvedGapCenter + gapHalf;
-          const bottomHeight = GAME_HEIGHT - bottomY - 70;
-
-          this.addPipe(x, topHeight / 2, 92, topHeight, true, startMoving);
-          this.addPipe(
-            x,
-            bottomY + bottomHeight / 2,
-            92,
-            bottomHeight,
-            false,
-            startMoving,
-          );
-
-          // 실제 장애물(몸통 92, 캡 118)보다 약간 뒤쪽에 넉넉한 통과 판정 존을 둔다.
-          const zone = this.add.zone(x + 86, GAME_HEIGHT / 2, 84, GAME_HEIGHT);
-          this.physics.add.existing(zone);
-          zone.body.setAllowGravity(false);
-          zone.body.setImmovable(true);
-          zone.body.setVelocityX(startMoving ? -this.pipeSpeed : 0);
-          zone.passed = false;
-          this.scoreZones.add(zone);
-        }
-
-        startObstacleMotion() {
-          this.pipes.children.each((obj) => {
-            if (obj?.body) obj.body.setVelocityX(-this.pipeSpeed);
-          });
-
-          this.scoreZones.children.each((zone) => {
-            if (zone?.body) zone.body.setVelocityX(-this.pipeSpeed);
-          });
-        }
-
-        addPipe(x, y, w, h, isTop, startMoving = true) {
-          const pipe = this.add
-            .rectangle(x, y, w, h, 0x46a35d)
-            .setDepth(this.depths.pipes);
-          pipe.setStrokeStyle(6, 0x2f6e40);
-
-          const capY = isTop ? y + h / 2 - 18 : y - h / 2 + 18;
-          const cap = this.add
-            .rectangle(x, capY, 118, 36, 0x5bc475)
-            .setDepth(this.depths.pipes);
-          cap.setStrokeStyle(5, 0x2f6e40);
-
-          this.physics.add.existing(pipe);
-          this.physics.add.existing(cap);
-
-          pipe.body.setImmovable(true);
-          pipe.body.setAllowGravity(false);
-          pipe.body.setVelocityX(startMoving ? -this.pipeSpeed : 0);
-
-          cap.body.setImmovable(true);
-          cap.body.setAllowGravity(false);
-          cap.body.setVelocityX(startMoving ? -this.pipeSpeed : 0);
-
-          this.pipes.add(pipe);
-          this.pipes.add(cap);
-
-          return { pipe, cap };
-        }
-
-        passGate(rider, zone) {
-          if (!this.gameStarted || zone.passed || this.deliveryOver) return;
-
-          zone.passed = true;
-          zone.destroy();
-
-          this.passedPipes++;
-          this.deliveryBonus += 3;
-          this.score += 8;
-
-          this.updateHUD();
-          GAME_AUDIO.play("gate", { volume: 0.82, rateJitter: 0.04 });
-          this.showToast("통과 성공!");
-
-          if (this.passedPipes >= this.targetPipes) {
-            this.completeDelivery();
-          }
-        }
-
-        hitPipe() {
-          if (this.deliveryOver) return;
-          this.failDelivery("건물 사이에 부딪혔어요!");
-        }
-
-        failDelivery(reason) {
-          if (this.deliveryOver) return;
-          this.deliveryOver = true;
-
-          GAME_AUDIO.stopMusic();
-          GAME_AUDIO.play("crash", { volume: 0.92, rateJitter: 0.03 });
-
-          this.physics.pause();
-          if (this.deliveryTimer) this.deliveryTimer.remove(false);
-
-          this.rider.setTint(0xff8a80);
-          this.cameras.main.shake(160, 0.012);
-
-          this.time.delayedCall(600, () => {
-            this.showResultOverlay(false, reason);
-          });
-        }
-
-        timeoutShift() {
-          if (this.deliveryOver) return;
-          this.deliveryOver = true;
-
-          GAME_AUDIO.stopMusic();
-          GAME_AUDIO.play("fail", { volume: 0.78, rateJitter: 0.02 });
-
-          this.physics.pause();
-          if (this.deliveryTimer) this.deliveryTimer.remove(false);
-
-          const completedRounds = getCompletedRounds(this.round);
-          const salary = calculateSalary(completedRounds);
-
-          this.showResultOverlay(
-            false,
-            `배달 시간이 종료되어 오늘 근무를 마감했어요.
-완료 라운드 ${completedRounds} / ${MAX_ROUNDS}
-오늘 알바비 ${formatWon(salary)}`,
-            true,
-          );
-        }
-
-        completeDelivery() {
-          if (this.deliveryOver) return;
-          this.deliveryOver = true;
-
-          GAME_AUDIO.stopMusic();
-          GAME_AUDIO.play("win", { volume: 0.92, rateJitter: 0.02 });
-
-          this.physics.pause();
-          if (this.deliveryTimer) this.deliveryTimer.remove(false);
-
-          const bonusScore = 20 + this.round * 4 + this.deliveryBonus;
-          this.score += bonusScore;
-
-          this.tweens.add({
-            targets: this.rider,
-            x: GAME_WIDTH / 2 + 120,
-            y: 320,
-            angle: -10,
-            duration: 700,
-            ease: "Quad.Out",
-          });
-
-          this.time.delayedCall(800, () => {
-            this.showResultOverlay(true, `배달 완료! 보너스 +${bonusScore}`);
-          });
-        }
-
-        showResultOverlay(success, detailText, isShiftEnd = false) {
-          UI_MODAL.show({
-            title: isShiftEnd ? "근무 종료!" : success ? "배달 성공!" : "배달 실패!",
-            summary: isShiftEnd
-              ? `최종 점수: ${this.score}`
-              : success
-                ? `현재 점수: ${this.score}`
-                : "다시 조심해서 점프해 봐요!",
-            detail: detailText,
-            buttonLabel: isShiftEnd
-              ? "다시 시작"
-              : success
-                ? "다음 주문 받기"
-                : "같은 라운드 재도전",
-            accent: success ? "#0b8f4d" : "#d81f2a",
-            onPrimary: () => {
-              GAME_AUDIO.play(success ? "success" : "uiSelect", {
-                volume: 0.72,
-                rateJitter: 0.02,
-              });
-
-              if (isShiftEnd) {
-                this.scene.start("KitchenScene", {
-                  score: 0,
-                  round: 1,
-                  timeLeft: TOTAL_TIME_LIMIT,
-                });
-                return;
-              }
-
-              this.scene.start("KitchenScene", {
-                score: this.score,
-                round: success ? this.round + 1 : this.round,
-                timeLeft: this.timeLeft,
-              });
-            },
-          });
-        }
-
-        showCenterMessage(text) {
-          this.centerMessage = this.add
-            .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, text, {
-              fontSize: "38px",
-              color: "#fff",
-              backgroundColor: "#92231ddd",
-              padding: { left: 18, right: 18, top: 12, bottom: 12 },
-              align: "center",
-            })
-            .setOrigin(0.5)
-            .setDepth(this.depths.message);
-        }
-
-        showToast(message) {
-          if (this.toastText) this.toastText.destroy();
-
-          this.toastText = this.add
-            .text(GAME_WIDTH / 2, 1010, message, {
-              fontSize: "24px",
-              color: "#fff",
-              backgroundColor: "#92231ddd",
-              padding: { left: 14, right: 14, top: 8, bottom: 8 },
-            })
-            .setOrigin(0.5)
-            .setDepth(this.depths.message);
-
-          this.tweens.add({
-            targets: this.toastText,
-            alpha: 0,
-            y: 980,
-            duration: 900,
-            onComplete: () => {
-              if (this.toastText) {
-                this.toastText.destroy();
-                this.toastText = null;
-              }
-            },
-          });
-        }
-
-        update() {
-          if (this.deliveryOver) return;
-
-          if (
-            Phaser.Input.Keyboard.JustDown(this.spaceKey) ||
-            Phaser.Input.Keyboard.JustDown(this.upKey)
-          ) {
-            this.flap();
-          }
-
-          if (this.gameStarted) {
-            (this.backgroundScrollers || []).forEach(({ sprite, speed }) => {
-              if (sprite && sprite.tilePositionX !== undefined) {
-                sprite.tilePositionX += speed;
-              }
-            });
-          }
-
-          if (this.rider.body.velocity.y > 0) {
-            this.rider.setAngle(
-              Phaser.Math.Clamp(this.rider.body.velocity.y * 0.05, -20, 70),
-            );
-          }
-
-          if (this.rider.y < 120) {
-            this.rider.y = 120;
-            this.rider.setVelocityY(80);
-          }
-
-          if (this.rider.y > GAME_HEIGHT - 110) {
-            this.failDelivery("바닥에 떨어졌어요!");
-          }
-
-          this.pipes.children.each((obj) => {
-            if (obj && obj.active && obj.x < -120) {
-              obj.destroy();
-            }
-          });
-
-          this.scoreZones.children.each((zone) => {
-            if (zone && zone.active && zone.x < -40) {
-              zone.destroy();
-            }
-          });
-
-          this.riderShadow.x = this.rider.x + 5;
-          this.riderShadow.width = Phaser.Math.Clamp(
-            120 - (this.rider.y - 240) * 0.05,
-            60,
-            120,
-          );
-        }
-      }
-
-      const config = {
-        type: Phaser.AUTO,
-        parent: "game-wrap",
-        width: GAME_WIDTH,
-        height: GAME_HEIGHT,
-        backgroundColor: "#f7e6c8",
-        scale: {
-          mode: Phaser.Scale.FIT,
-          autoCenter: Phaser.Scale.CENTER_BOTH,
-        },
-        physics: {
-          default: "arcade",
-          arcade: {
-            gravity: { y: 0 },
-            debug: false,
-          },
-        },
-        scene: [BootScene, KitchenScene, DeliveryScene],
-      };
-
-      new Phaser.Game(config);
-    </script>
-  </body>
+      iframe.addEventListener('load', () => setTimeout(focusIframe, 90));
+      iframe.addEventListener('pointerdown', focusIframe, { passive: true });
+      gameHost.appendChild(iframe);
+      currentGame = { iframe, destroy() { iframe.remove(); } };
+      mobileControls.classList.add('hidden');
+      setTimeout(focusIframe, 140);
+      return;
+    }
+  }
+
+  backBtn.addEventListener('click', () => {
+    clearGameHost();
+    showScreen('roulette');
+    resetRoulette();
+  });
+
+
+  function focusActiveGameIframe() {
+    const iframe = gameHost.querySelector('iframe');
+    if (!iframe) return;
+    try { iframe.focus(); } catch (e) {}
+    try { iframe.contentWindow && iframe.contentWindow.focus(); } catch (e) {}
+  }
+
+  function forwardGameKeyboard(event) {
+    if (screens.game.classList.contains('hidden')) return;
+    const iframe = gameHost.querySelector('iframe');
+    if (!iframe || document.activeElement === iframe) return;
+    const gameKeys = new Set([
+      'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+      ' ', 'Spacebar', 'Enter', 'Escape',
+      'a', 'A', 'd', 'D', 'w', 'W', 's', 'S', 'x', 'X', 'c', 'C', 'j', 'J', 'k', 'K', 'b', 'B', 'p', 'P', 'Shift'
+    ]);
+    if (!gameKeys.has(event.key) && event.code !== 'Space') return;
+    if (event.code === 'Space' || event.key.startsWith('Arrow')) event.preventDefault();
+    try {
+      const forwarded = new KeyboardEvent(event.type, {
+        key: event.key,
+        code: event.code,
+        location: event.location,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        repeat: event.repeat,
+        bubbles: true,
+        cancelable: true
+      });
+      iframe.contentWindow.dispatchEvent(forwarded);
+    } catch (e) {
+      focusActiveGameIframe();
+    }
+  }
+
+  gameHost.addEventListener('pointerdown', focusActiveGameIframe, { passive: true });
+  window.addEventListener('keydown', forwardGameKeyboard);
+  window.addEventListener('keyup', forwardGameKeyboard);
+
+  spinBtn.addEventListener('click', startSpin);
+  stopBtn.addEventListener('click', stopSpin);
+  rerollBtn.addEventListener('click', enableDirectSelect);
+  wheelCanvas.addEventListener('pointerdown', (event) => {
+    if (!wheelState.directSelectMode || wheelState.freeSpin || wheelState.stopping) return;
+    event.preventDefault();
+    const index = getWheelIndexFromPointerEvent(event);
+    if (index == null) {
+      rouletteStatus.textContent = '가운데가 아닌 바깥쪽 게임 칸을 눌러주세요.';
+      ROULETTE_AUDIO.tick();
+      return;
+    }
+    chooseRouletteOption(index, true);
+  });
+  window.addEventListener('pointerdown', trySpeakTitle, { once: true });
+
+  function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  }
+
+  drawWheel();
+  requestAnimationFrame(wheelLoop);
+  runIntro();
+})();
+</script>
+</body>
 </html>
