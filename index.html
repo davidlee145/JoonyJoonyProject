@@ -1,1113 +1,811 @@
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>주니주니 랜덤 게임</title>
-  <!-- 복사/붙여넣기용 분리 버전: logo.png, fastfood_original.html 파일을 index.html과 같은 폴더에 둬야 합니다. -->
-  <style>
-    :root {
-      --bg1: #0a1031;
-      --bg2: #1d3472;
-      --card: rgba(255,255,255,0.12);
-      --stroke: rgba(255,255,255,0.2);
-      --text: #eef3ff;
-      --muted: #cbd8ff;
-      --shadow: 0 24px 60px rgba(0,0,0,0.35);
-      --pink: #ff5ba7;
-      --cyan: #4ed9ff;
-      --yellow: #ffd64d;
-      --green: #65db61;
-      --orange: #ff9640;
-    }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
-      background:
-        radial-gradient(circle at top, rgba(114,162,255,0.35), transparent 34%),
-        radial-gradient(circle at 85% 15%, rgba(255,214,77,0.2), transparent 28%),
-        linear-gradient(180deg, var(--bg2) 0%, #10194a 38%, #070c22 100%);
-      color: var(--text);
-    }
-    body::before, body::after {
-      content: "";
-      position: fixed;
-      inset: auto;
-      width: 42vmax;
-      height: 42vmax;
-      border-radius: 50%;
-      filter: blur(90px);
-      opacity: 0.16;
-      pointer-events: none;
-      z-index: 0;
-    }
-    body::before { left: -12vmax; top: -8vmax; background: #4ed9ff; }
-    body::after { right: -12vmax; bottom: -12vmax; background: #ff5ba7; }
-    .screen {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      z-index: 1;
-    }
-    .hidden { display: none !important; }
-    #introScreen {
-      background: radial-gradient(circle at center, rgba(255,255,255,0.06), rgba(0,0,0,0.0) 40%);
-      flex-direction: column;
-      gap: 22px;
-      text-align: center;
-    }
-    .intro-glow {
-      position: absolute;
-      width: min(78vw, 520px);
-      height: min(78vw, 520px);
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,255,0.3), rgba(78,217,255,0.1) 50%, transparent 72%);
-      filter: blur(14px);
-      animation: pulse 2.3s ease-in-out infinite;
-    }
-    #introLogo {
-      position: relative;
-      width: min(72vw, 460px);
-      max-width: 88%;
-      opacity: 0;
-      transform: scale(0.84);
-      filter: drop-shadow(0 22px 40px rgba(0,0,0,0.32));
-      transition: opacity 1.2s ease, transform 1.2s ease;
-      z-index: 1;
-    }
-    #introLogo.show {
-      opacity: 1;
-      transform: scale(1);
-    }
-    .intro-title {
-      z-index: 1;
-      font-size: clamp(30px, 4.5vw, 48px);
-      font-weight: 900;
-      letter-spacing: -0.03em;
-      text-shadow: 0 6px 18px rgba(0,0,0,0.3);
-    }
-    .intro-sub {
-      z-index: 1;
-      font-size: clamp(14px, 2.2vw, 22px);
-      color: var(--muted);
-    }
-    @keyframes pulse {
-      0%,100% { transform: scale(0.96); opacity: 0.8; }
-      50% { transform: scale(1.06); opacity: 1; }
-    }
-    .panel {
-      width: min(100%, 1020px);
-      max-height: calc(100vh - 32px);
-      border-radius: 30px;
-      border: 1px solid var(--stroke);
-      background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.08));
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
-      overflow: hidden;
-    }
-    #rouletteScreen .panel {
-      padding: 24px 22px 20px;
-      display: grid;
-      grid-template-columns: minmax(320px, 520px) minmax(280px, 1fr);
-      gap: 12px 22px;
-      align-items: center;
-    }
-    .roulette-side {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px;
-    }
-    .roulette-info {
-      padding: 14px 10px 18px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .title-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      width: fit-content;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.24);
-      background: rgba(255,255,255,0.08);
-      color: var(--yellow);
-      font-weight: 800;
-      font-size: 14px;
-    }
-    .roulette-title {
-      margin: 0;
-      font-size: clamp(32px, 4vw, 52px);
-      line-height: 1.05;
-      letter-spacing: -0.04em;
-    }
-    .roulette-desc {
-      margin: 0;
-      font-size: clamp(16px, 2vw, 22px);
-      line-height: 1.55;
-      color: var(--muted);
-    }
-    .pill-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin: 6px 0 2px;
-    }
-    .pill {
-      padding: 10px 14px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 700;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.08);
-    }
-    .wheel-wrap {
-      position: relative;
-      width: min(82vw, 500px);
-      aspect-ratio: 1;
-      display: grid;
-      place-items: center;
-      margin: 0 auto;
-    }
-    #wheelCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: pointer;
-      touch-action: manipulation;
-      filter: drop-shadow(0 26px 40px rgba(0,0,0,0.45));
-    }
-    .wheel-pointer {
-      position: absolute;
-      top: -4px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 0;
-      height: 0;
-      border-left: 22px solid transparent;
-      border-right: 22px solid transparent;
-      border-top: 50px solid #fff3bf;
-      border-bottom: 0 solid transparent;
-      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.5));
-      z-index: 5;
-    }
-    .wheel-pointer::after {
-      content: "";
-      position: absolute;
-      left: -13px;
-      top: -42px;
-      width: 26px;
-      height: 11px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.22);
-    }
-    .result-card {
-      border-radius: 24px;
-      padding: 16px 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.07));
-      border: 1px solid rgba(255,255,255,0.16);
-      min-height: 92px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 6px;
-    }
-    .result-card small {
-      color: #b7c9ff;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-    }
-    .result-card strong {
-      font-size: clamp(22px, 3vw, 32px);
-      line-height: 1.25;
-    }
-    .controls-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 6px;
-    }
-    button {
-      border: 0;
-      outline: none;
-      cursor: pointer;
-      font: inherit;
-      color: #fff;
-      user-select: none;
-    }
-    .action-btn {
-      min-width: 150px;
-      border-radius: 18px;
-      padding: 16px 20px;
-      font-size: 18px;
-      font-weight: 900;
-      letter-spacing: -0.02em;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
-      transition: transform .15s ease, opacity .15s ease, filter .2s ease;
-    }
-    .action-btn:active { transform: translateY(2px) scale(.99); }
-    .action-btn[disabled] { opacity: .45; cursor: not-allowed; filter: grayscale(.12); }
-    .spin-btn { background: linear-gradient(180deg, #51e2ff, #248dff); }
-    .stop-btn { background: linear-gradient(180deg, #ff7c9c, #ff4782); }
-    .secondary-btn { background: linear-gradient(180deg, #92a6ff, #586df4); }
-    .game-status {
-      font-size: 16px;
-      color: #d9e3ff;
-      min-height: 24px;
-    }
-    #gameScreen {
-      align-items: stretch;
-      justify-content: stretch;
-      padding: 0;
-      background: linear-gradient(180deg, rgba(7,12,34,.98), rgba(7,12,34,.98));
-    }
-    .game-shell {
-      flex: 1;
-      min-height: 100%;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-    }
-    .game-topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 12px 16px;
-      background: rgba(255,255,255,0.08);
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      backdrop-filter: blur(14px);
-      z-index: 5;
-    }
-    .game-title {
-      font-size: clamp(18px, 2.2vw, 28px);
-      font-weight: 900;
-      letter-spacing: -0.03em;
-    }
-    .back-btn {
-      border-radius: 14px;
-      padding: 12px 16px;
-      background: linear-gradient(180deg, #8ea5ff, #6075ff);
-      font-weight: 800;
-      white-space: nowrap;
-    }
-    #gameHost {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      display: grid;
-      place-items: center;
-    }
-    #gameHost iframe,
-    #gameHost canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #061228;
-    }
-    .canvas-shell {
-      width: 100%;
-      height: 100%;
-      display: grid;
-      place-items: center;
-      padding: 10px;
-    }
-    #gameHost .canvas-shell canvas {
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      max-height: 100%;
-      aspect-ratio: 9 / 16;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.12);
-      box-shadow: var(--shadow);
-      background: #f7e6c8;
-    }
-    #mobileControls {
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-      padding: 10px 12px 14px;
-      flex-wrap: wrap;
-      background: rgba(255,255,255,0.04);
-      border-top: 1px solid rgba(255,255,255,0.08);
-    }
-    .ctrl-btn {
-      min-width: 76px;
-      padding: 12px 14px;
-      border-radius: 16px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.08));
-      border: 1px solid rgba(255,255,255,0.12);
-      font-weight: 800;
-      color: #fff;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
-    }
-    .ctrl-btn.wide { min-width: 120px; }
-    .empty-controls {
-      color: #b9c8ff;
-      font-size: 14px;
-      padding: 6px 0 10px;
-    }
-    .modal {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: rgba(0,0,0,.56);
-      z-index: 20;
-      backdrop-filter: blur(5px);
-    }
-    .modal.show { display: flex; }
-    .modal-card {
-      width: min(90vw, 520px);
-      border-radius: 28px;
-      padding: 26px 22px 22px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.97), rgba(239,244,255,0.97));
-      color: #25345a;
-      text-align: center;
-      box-shadow: 0 28px 60px rgba(0,0,0,.35);
-    }
-    .modal-card h3 {
-      margin: 0 0 10px;
-      font-size: clamp(28px, 4vw, 38px);
-      line-height: 1.1;
-    }
-    .modal-card p {
-      margin: 0;
-      font-size: clamp(18px, 2.2vw, 22px);
-      line-height: 1.5;
-      white-space: pre-line;
-    }
-    .modal-actions {
-      margin-top: 18px;
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    @media (max-width: 860px) {
-      #rouletteScreen .panel {
-        grid-template-columns: 1fr;
-        justify-items: center;
-        gap: 8px;
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>주니주니 랜덤 게임</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Jua&display=swap");
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
       }
-      .roulette-info { padding: 0 6px 8px; }
-      .roulette-side { order: -1; }
-      .wheel-wrap { width: min(86vw, 460px); }
-      .game-topbar { padding: 10px 12px; }
-    }
-
-    @media (max-width: 640px) {
-      .screen { padding: 8px; }
-      #rouletteScreen {
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: radial-gradient(
+          circle at top,
+          #384f94,
+          #08112f 62%,
+          #040715
+        );
+        color: #fff;
+        touch-action: none;
+      }
+      body:before {
+        content: "";
+        position: fixed;
+        inset: -20%;
+        background:
+          radial-gradient(
+            circle at 20% 15%,
+            rgba(92, 220, 255, 0.25),
+            transparent 32%
+          ),
+          radial-gradient(
+            circle at 80% 20%,
+            rgba(255, 214, 85, 0.18),
+            transparent 32%
+          ),
+          radial-gradient(
+            circle at 50% 90%,
+            rgba(255, 92, 169, 0.16),
+            transparent 35%
+          );
+        pointer-events: none;
+      }
+      .screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
         align-items: center;
         justify-content: center;
+        padding: 18px;
+      }
+      .hidden {
+        display: none !important;
+      }
+      #introScreen {
+        flex-direction: column;
+        gap: 18px;
+        text-align: center;
+      }
+      .introGlow {
+        position: absolute;
+        width: min(78vw, 520px);
+        height: min(78vw, 520px);
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.3),
+          rgba(78, 217, 255, 0.1) 50%,
+          transparent 72%
+        );
+        filter: blur(16px);
+        animation: pulse 2.2s ease-in-out infinite;
+      }
+      .logo {
+        position: relative;
+        width: min(70vw, 450px);
+        max-width: 88%;
+        opacity: 0;
+        transform: scale(0.82);
+        filter: drop-shadow(0 22px 42px rgba(0, 0, 0, 0.35));
+        transition:
+          opacity 1.15s ease,
+          transform 1.15s ease;
+      }
+      .logo.show {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .introTitle {
+        position: relative;
+        font-size: clamp(32px, 5vw, 54px);
+        font-weight: 900;
+        text-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+        opacity: 0;
+        transform: translateY(18px) scale(0.96);
+        transition:
+          opacity 1.15s ease,
+          transform 1.15s ease;
+      }
+
+      .introTitle.show {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      .panel {
+        width: min(100%, 1040px);
+        max-height: calc(100dvh - 28px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 30px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.16),
+          rgba(255, 255, 255, 0.08)
+        );
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.36);
+        backdrop-filter: blur(18px);
+        overflow: hidden;
       }
       #rouletteScreen .panel {
-        width: min(100%, 560px);
-        height: calc(100dvh - 16px);
-        max-height: calc(100dvh - 16px);
-        overflow: hidden;
-        border-radius: 24px;
-        padding: 10px 10px 12px;
+        padding: 22px;
+        display: grid;
+        grid-template-columns: minmax(320px, 520px) minmax(280px, 1fr);
+        gap: 18px;
+        align-items: center;
+      }
+      .wheelWrap {
+        position: relative;
+        width: min(80vw, 500px);
+        aspect-ratio: 1;
+        margin: auto;
+        display: grid;
+        place-items: center;
+      }
+      #wheel {
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 26px 38px rgba(0, 0, 0, 0.42));
+      }
+      .pointer {
+        position: absolute;
+        top: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 22px solid transparent;
+        border-right: 22px solid transparent;
+        border-top: 52px solid #fff4bf;
+        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.5));
+        z-index: 5;
+      }
+      .info {
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: 8px;
+        gap: 14px;
       }
-      .roulette-side {
-        order: 0;
-        padding: 0;
-        flex: 0 0 auto;
+      .badge {
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #ffe374;
+        font-weight: 900;
       }
-      .wheel-wrap {
-        width: min(82vw, 330px, 45dvh);
+      .title {
+        margin: 0;
+        font-size: clamp(32px, 4vw, 52px);
+        line-height: 1.05;
       }
-      .wheel-pointer {
-        top: -2px;
-        border-left-width: 17px;
-        border-right-width: 17px;
-        border-top-width: 38px;
+      .desc {
+        margin: 0;
+        color: #d7e2ff;
+        font-size: clamp(16px, 2vw, 22px);
+        line-height: 1.5;
       }
-      .wheel-pointer::after {
-        left: -10px;
-        top: -32px;
-        width: 20px;
-        height: 9px;
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
       }
-      .roulette-info {
-        width: 100%;
-        padding: 0;
-        gap: 7px;
-        align-items: stretch;
-        flex: 0 0 auto;
-      }
-      .title-badge {
-        display: none;
-      }
-      .roulette-title {
-        text-align: center;
-        font-size: clamp(24px, 7vw, 34px);
-      }
-      .roulette-desc,
-      .pill-list {
-        display: none;
-      }
-      .result-card {
-        min-height: 64px;
-        border-radius: 18px;
+      .pill {
         padding: 9px 12px;
-        gap: 2px;
-      }
-      .result-card small { font-size: 11px; }
-      .result-card strong { font-size: clamp(17px, 5vw, 23px); }
-      .game-status { font-size: 12px; min-height: 16px; }
-      .controls-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        width: 100%;
-        margin-top: 0;
-      }
-      .controls-row .action-btn {
-        min-width: 0;
-        width: 100%;
-        min-height: 48px;
-        padding: 11px 8px;
-        border-radius: 15px;
-        font-size: 15px;
-      }
-      .controls-row .secondary-btn {
-        grid-column: 1 / -1;
-      }
-      .game-shell { grid-template-rows: auto minmax(0, 1fr) auto; height: 100dvh; }
-      .canvas-shell { padding: 6px; }
-      #mobileControls { gap: 8px; padding: 8px 8px 10px; }
-      .ctrl-btn { flex: 1 1 28%; min-width: 86px; padding: 13px 9px; }
-      .ctrl-btn.wide { flex-basis: 42%; min-width: 110px; }
-    }
-
-    @media (max-width: 380px), (max-height: 680px) {
-      #rouletteScreen .panel {
-        padding: 8px;
-        gap: 6px;
-      }
-      .wheel-wrap {
-        width: min(80vw, 295px, 42dvh);
-      }
-      .roulette-title {
-        font-size: clamp(21px, 6.2vw, 29px);
-      }
-      .result-card {
-        min-height: 58px;
-        padding: 8px 10px;
-      }
-      .result-card strong { font-size: clamp(16px, 4.8vw, 21px); }
-      .game-status { font-size: 11px; }
-      .controls-row .action-btn {
-        min-height: 44px;
-        padding: 9px 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        font-weight: 800;
         font-size: 14px;
       }
-    }
-    @media (orientation: landscape) and (max-height: 640px) {
-      #rouletteScreen .panel { grid-template-columns: minmax(260px, 390px) 1fr; max-height: calc(100dvh - 18px); overflow-y: auto; }
-      .wheel-wrap { width: min(48vw, 360px); }
-      .roulette-title { font-size: clamp(26px, 4vw, 40px); }
-      .roulette-desc { font-size: 14px; }
-      .result-card { min-height: 74px; padding: 12px 14px; }
-      .action-btn { padding: 12px 16px; }
-    }
-  </style>
-</head>
-<body>
-  <section id="introScreen" class="screen">
-    <div class="intro-glow"></div>
-    <img id="introLogo" alt="주니주니 로고" src="./logo.png" />
-    <div class="intro-title">주니주니 랜덤 게임</div>
-    <div class="intro-sub">이미지가 페이드 인된 뒤 룰렛 화면으로 이동합니다.</div>
-  </section>
-
-  <section id="rouletteScreen" class="screen hidden">
-    <div class="panel">
-      <div class="roulette-side">
-        <div class="wheel-wrap">
-          <div class="wheel-pointer"></div>
-          <canvas id="wheelCanvas" width="560" height="560"></canvas>
-        </div>
-      </div>
-      <div class="roulette-info">
-        <div class="title-badge">🎲 랜덤 선택</div>
-        <h1 class="roulette-title">주니주니 랜덤 게임</h1>
-        <p class="roulette-desc">
-          <strong>돌리기</strong> 버튼으로 룰렛을 회전시키고,<br />
-          <strong>멈추기</strong> 버튼으로 원하는 순간에 결과를 결정하세요.
-        </p>
-        <div class="pill-list">
-          <div class="pill">🍔 패스트푸드 알바</div>
-          <div class="pill">🧱 테트리스 블록 배틀</div>
-          <div class="pill">✈️ 풍선 팡팡 갤럭시</div>
-          <div class="pill">🤖 AI 미션</div>
-        </div>
-        <div class="result-card">
-          <small>선택 결과</small>
-          <strong id="resultText">룰렛을 돌려 게임을 골라보세요!</strong>
-          <div class="game-status" id="rouletteStatus">버튼으로 시작과 정지를 조작할 수 있어요.</div>
-        </div>
-        <div class="controls-row">
-          <button id="spinBtn" class="action-btn spin-btn">돌리기</button>
-          <button id="stopBtn" class="action-btn stop-btn" disabled>멈추기</button>
-          <button id="rerollBtn" class="action-btn secondary-btn">직접 선택</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="gameScreen" class="screen hidden">
-    <div class="game-shell">
-      <div class="game-topbar">
-        <button id="backBtn" class="back-btn">← 룰렛으로 돌아가기</button>
-        <div class="game-title" id="gameTitle">게임</div>
-        <div style="width: 1px;"></div>
-      </div>
-      <div id="gameHost"></div>
-      <div id="mobileControls"><div class="empty-controls">선택된 게임에 맞는 버튼이 여기에 표시됩니다.</div></div>
-    </div>
-  </section>
-
-  <div id="modal" class="modal">
-    <div class="modal-card">
-      <h3 id="modalTitle"></h3>
-      <p id="modalBody"></p>
-      <div class="modal-actions" id="modalActions"></div>
-    </div>
-  </div>
-
-<script>
-(() => {
-  const LOGO_SRC = "./logo.png";
-  const FASTFOOD_PAGE = "./fastfood_original.html";
-  const STAIRS_PAGE = "./tetris_stairs.html";
-  const GALAGA_PAGE = "./balloon_galaga.html";
-  const TAU = Math.PI * 2;
-  const screens = {
-    intro: document.getElementById('introScreen'),
-    roulette: document.getElementById('rouletteScreen'),
-    game: document.getElementById('gameScreen')
-  };
-  const introLogo = document.getElementById('introLogo');
-  const wheelCanvas = document.getElementById('wheelCanvas');
-  const wctx = wheelCanvas.getContext('2d');
-  const spinBtn = document.getElementById('spinBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const rerollBtn = document.getElementById('rerollBtn');
-  const resultText = document.getElementById('resultText');
-  const rouletteStatus = document.getElementById('rouletteStatus');
-  const gameHost = document.getElementById('gameHost');
-  const gameTitle = document.getElementById('gameTitle');
-  const mobileControls = document.getElementById('mobileControls');
-  const backBtn = document.getElementById('backBtn');
-  const modal = document.getElementById('modal');
-  const modalTitle = document.getElementById('modalTitle');
-  const modalBody = document.getElementById('modalBody');
-  const modalActions = document.getElementById('modalActions');
-
-  const rouletteOptions = [
-    { id: 'fastfood', title: '패스트푸드 알바', wheelLabel: ['패스트푸드', '알바'], colors: ['#ffbf43', '#ff7f43'] },
-    { id: 'tetris', title: '테트리스 블록 배틀', wheelLabel: ['테트리스', '블록', '배틀'], colors: ['#4fd7ff', '#2c7fff'] },
-    { id: 'balloon', title: '풍선 팡팡 갤럭시', wheelLabel: ['풍선', '팡팡', '갤럭시'], colors: ['#82eb7c', '#2ec27e'] },
-    { id: 'ai', title: 'AI 미션', wheelLabel: ['AI', '직접', '게임 만들기'], colors: ['#ff6ec8', '#9d52ff'] }
-  ];
-
-  let currentGame = null;
-  let titleSpoken = false;
-
-  const wheelState = {
-    rotation: 0,
-    speed: 0,
-    freeSpin: false,
-    stopping: false,
-    directSelectMode: false,
-    stopAnim: null,
-    resultIndex: null,
-    lastTs: 0,
-    lastTickIndex: -1,
-    lastTickAt: 0
-  };
-
-  const ROULETTE_AUDIO = (() => {
-    let ctx = null;
-    function getCtx() {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return null;
-      if (!ctx) ctx = new AudioCtx();
-      if (ctx.state === 'suspended') ctx.resume();
-      return ctx;
-    }
-    function tone(freq, duration = 0.08, type = 'sine', volume = 0.055, delay = 0) {
-      const ac = getCtx();
-      if (!ac) return;
-      const now = ac.currentTime + delay;
-      const osc = ac.createOscillator();
-      const gain = ac.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      osc.connect(gain).connect(ac.destination);
-      osc.start(now);
-      osc.stop(now + duration + 0.02);
-    }
-    return {
-      unlock: getCtx,
-      spinStart() { tone(360, 0.08, 'triangle', 0.055); tone(620, 0.11, 'triangle', 0.06, 0.055); },
-      tick() { tone(880, 0.035, 'square', 0.025); },
-      stopStart() { tone(520, 0.08, 'sawtooth', 0.04); },
-      select() { tone(740, 0.09, 'triangle', 0.055); tone(980, 0.13, 'sine', 0.05, 0.065); },
-      fanfare() { tone(523, 0.1, 'triangle', 0.06); tone(659, 0.11, 'triangle', 0.06, 0.08); tone(784, 0.16, 'triangle', 0.065, 0.16); }
-    };
-  })();
-
-  function showScreen(name) {
-    Object.values(screens).forEach(el => el.classList.add('hidden'));
-    screens[name].classList.remove('hidden');
-  }
-
-  function showModal(title, body, buttons = []) {
-    modalTitle.textContent = title;
-    modalBody.textContent = body;
-    modalActions.innerHTML = '';
-    buttons.forEach(btn => {
-      const b = document.createElement('button');
-      b.className = 'action-btn ' + (btn.className || 'secondary-btn');
-      b.textContent = btn.label;
-      b.addEventListener('click', () => {
-        hideModal();
-        if (btn.onClick) btn.onClick();
-      });
-      modalActions.appendChild(b);
-    });
-    modal.classList.add('show');
-  }
-  function hideModal() { modal.classList.remove('show'); }
-
-  function trySpeakTitle() {
-    if (titleSpoken || !('speechSynthesis' in window)) return;
-    titleSpoken = true;
-    try {
-      const utter = new SpeechSynthesisUtterance('주니주니 랜덤 게임');
-      utter.lang = 'ko-KR';
-      utter.rate = 0.95;
-      utter.pitch = 1.05;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utter);
-    } catch (e) {
-      console.warn('speech failed', e);
-    }
-  }
-
-  function runIntro() {
-    showScreen('intro');
-    requestAnimationFrame(() => introLogo.classList.add('show'));
-    setTimeout(trySpeakTitle, 180);
-    setTimeout(() => {
-      showScreen('roulette');
-      rouletteStatus.textContent = '룰렛을 돌려 게임을 선택해보세요.';
-    }, 2800);
-  }
-
-  function getCurrentIndexAtPointer() {
-    const arc = TAU / rouletteOptions.length;
-    let normalized = ((-wheelState.rotation % TAU) + TAU) % TAU;
-    const idx = Math.floor(normalized / arc) % rouletteOptions.length;
-    return idx;
-  }
-
-  function getWheelIndexFromPointerEvent(event) {
-    const rect = wheelCanvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width * wheelCanvas.width;
-    const y = (event.clientY - rect.top) / rect.height * wheelCanvas.height;
-    const cx = wheelCanvas.width / 2;
-    const cy = wheelCanvas.height / 2;
-    const dx = x - cx;
-    const dy = y - cy;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 90 || dist > 255) return null;
-    const arc = TAU / rouletteOptions.length;
-    const angle = Math.atan2(dy, dx);
-    const rel = ((angle - (wheelState.rotation - Math.PI / 2)) % TAU + TAU) % TAU;
-    return Math.floor(rel / arc) % rouletteOptions.length;
-  }
-
-  function chooseRouletteOption(index, byDirectSelect = false) {
-    if (index == null || !rouletteOptions[index]) return;
-    wheelState.freeSpin = false;
-    wheelState.stopping = false;
-    wheelState.directSelectMode = false;
-    wheelState.stopAnim = null;
-    wheelState.resultIndex = index;
-    wheelState.speed = 0;
-    const chosen = rouletteOptions[index];
-    spinBtn.disabled = false;
-    stopBtn.disabled = true;
-    rerollBtn.disabled = false;
-    resultText.textContent = chosen.id === 'ai' ? 'AI 미션' : chosen.title;
-    rouletteStatus.textContent = byDirectSelect
-      ? `${chosen.title}을 직접 선택했어요!`
-      : (chosen.id === 'ai' ? 'AI 미션에 당첨되었어요!' : `${chosen.title} 준비 중...`);
-    if (byDirectSelect) ROULETTE_AUDIO.select();
-    else ROULETTE_AUDIO.fanfare();
-    drawWheel();
-    handleRouletteResult(chosen);
-  }
-
-  function drawWheel() {
-    const ctx = wctx;
-    const { width, height } = wheelCanvas;
-    const cx = width / 2;
-    const cy = height / 2;
-    const radius = 240;
-    const arc = TAU / rouletteOptions.length;
-
-    ctx.clearRect(0, 0, width, height);
-    const bgGrad = ctx.createRadialGradient(cx, cy, 36, cx, cy, radius + 28);
-    bgGrad.addColorStop(0, 'rgba(255,255,255,0.14)');
-    bgGrad.addColorStop(1, 'rgba(255,255,255,0.02)');
-    ctx.fillStyle = bgGrad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 26, 0, TAU);
-    ctx.fill();
-
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius + 14, 0, TAU);
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fill();
-
-    for (let i = 0; i < rouletteOptions.length; i++) {
-      const opt = rouletteOptions[i];
-      const start = wheelState.rotation - Math.PI / 2 + i * arc;
-      const end = start + arc;
-      const grad = ctx.createLinearGradient(
-        Math.cos(start) * radius, Math.sin(start) * radius,
-        Math.cos(end) * radius, Math.sin(end) * radius
-      );
-      grad.addColorStop(0, opt.colors[0]);
-      grad.addColorStop(1, opt.colors[1]);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, radius, start, end);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.stroke();
-
-      ctx.save();
-      const mid = start + arc / 2;
-      ctx.rotate(mid);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
-      roundRect(ctx, 62, -44, 126, 88, 18, true, false);
-      ctx.fillStyle = '#fff';
-      ctx.font = '900 23px Arial, sans-serif';
-      opt.wheelLabel.forEach((line, lineIdx) => {
-        ctx.fillText(line, 126, -18 + lineIdx * 24);
-      });
-      ctx.restore();
-    }
-
-    if (wheelState.resultIndex !== null && !wheelState.freeSpin && !wheelState.stopping) {
-      const i = wheelState.resultIndex;
-      const start = wheelState.rotation - Math.PI / 2 + i * arc;
-      const end = start + arc;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, radius, start, end);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255,255,255,0.23)';
-      ctx.fill();
-    }
-
-    const centerGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
-    centerGrad.addColorStop(0, '#ffffff');
-    centerGrad.addColorStop(0.22, '#e6efff');
-    centerGrad.addColorStop(1, '#96acff');
-    ctx.beginPath();
-    ctx.arc(0, 0, 82, 0, TAU);
-    ctx.fillStyle = centerGrad;
-    ctx.fill();
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.stroke();
-    ctx.fillStyle = '#304479';
-    ctx.textAlign = 'center';
-    ctx.font = '900 20px Arial, sans-serif';
-    ctx.fillText('주니주니', 0, -18);
-    ctx.fillText('랜덤', 0, 8);
-    ctx.fillText('게임', 0, 34);
-    if (wheelState.directSelectMode) {
-      ctx.fillStyle = 'rgba(6,13,32,0.45)';
-      ctx.beginPath();
-      ctx.arc(0, 0, radius + 12, 0, TAU);
-      ctx.strokeStyle = 'rgba(255,255,255,0.78)';
-      ctx.lineWidth = 9;
-      ctx.setLineDash([16, 10]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    ctx.restore();
-  }
-
-  function wheelLoop(ts) {
-    const prev = wheelState.lastTs || ts;
-    const dt = Math.min(0.033, (ts - prev) / 1000);
-    wheelState.lastTs = ts;
-
-    if (wheelState.freeSpin) {
-      wheelState.speed += (8.2 - wheelState.speed) * Math.min(1, dt * 5);
-      wheelState.rotation += wheelState.speed * dt;
-    } else if (wheelState.stopping && wheelState.stopAnim) {
-      const a = wheelState.stopAnim;
-      a.elapsed += dt;
-      const t = Math.min(1, a.elapsed / a.duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      wheelState.rotation = a.from + (a.to - a.from) * eased;
-      if (t >= 1) {
-        wheelState.stopping = false;
-        wheelState.stopAnim = null;
-        chooseRouletteOption(a.index, false);
+      .result {
+        border-radius: 24px;
+        padding: 16px 18px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        min-height: 88px;
       }
-    }
-
-    if (wheelState.freeSpin || wheelState.stopping) {
-      const tickIndex = getCurrentIndexAtPointer();
-      if (tickIndex !== wheelState.lastTickIndex && ts - wheelState.lastTickAt > 70) {
-        wheelState.lastTickIndex = tickIndex;
-        wheelState.lastTickAt = ts;
-        ROULETTE_AUDIO.tick();
+      .result small {
+        color: #b8c9ff;
+        font-weight: 800;
       }
-    }
-
-    drawWheel();
-    requestAnimationFrame(wheelLoop);
-  }
-
-  function startSpin() {
-    if (wheelState.freeSpin || wheelState.stopping) return;
-    wheelState.directSelectMode = false;
-    wheelState.resultIndex = null;
-    wheelState.freeSpin = true;
-    wheelState.speed = Math.max(wheelState.speed, 3.2);
-    wheelState.lastTickIndex = -1;
-    resultText.textContent = '룰렛 회전 중...';
-    rouletteStatus.textContent = '멈추기 버튼으로 원하는 순간에 멈춰보세요.';
-    spinBtn.disabled = true;
-    stopBtn.disabled = false;
-    rerollBtn.disabled = true;
-    ROULETTE_AUDIO.unlock();
-    ROULETTE_AUDIO.spinStart();
-  }
-
-  function stopSpin() {
-    if (!wheelState.freeSpin || wheelState.stopping) return;
-    wheelState.freeSpin = false;
-    wheelState.stopping = true;
-    wheelState.directSelectMode = false;
-    stopBtn.disabled = true;
-    ROULETTE_AUDIO.stopStart();
-    const idx = Math.floor(Math.random() * rouletteOptions.length);
-    const arc = TAU / rouletteOptions.length;
-    let target = -(idx + 0.5) * arc;
-    while (target < wheelState.rotation + TAU * 4.5) target += TAU;
-    wheelState.stopAnim = { from: wheelState.rotation, to: target, duration: 2.9, elapsed: 0, index: idx };
-    rouletteStatus.textContent = '결과를 확인하는 중...';
-  }
-
-  function resetRoulette() {
-    wheelState.freeSpin = false;
-    wheelState.stopping = false;
-    wheelState.directSelectMode = false;
-    wheelState.stopAnim = null;
-    wheelState.resultIndex = null;
-    wheelState.speed = 0;
-    resultText.textContent = '룰렛을 돌려 게임을 골라보세요!';
-    rouletteStatus.textContent = '버튼으로 시작과 정지를 조작할 수 있어요.';
-    spinBtn.disabled = false;
-    stopBtn.disabled = true;
-    rerollBtn.disabled = false;
-    drawWheel();
-  }
-
-  function enableDirectSelect() {
-    if (wheelState.freeSpin || wheelState.stopping) return;
-    wheelState.directSelectMode = true;
-    wheelState.resultIndex = null;
-    spinBtn.disabled = false;
-    stopBtn.disabled = true;
-    rerollBtn.disabled = false;
-    resultText.textContent = '원하는 칸을 눌러 직접 선택하세요!';
-    rouletteStatus.textContent = 'PC는 마우스 클릭, 모바일은 터치로 선택할 수 있어요.';
-    ROULETTE_AUDIO.unlock();
-    ROULETTE_AUDIO.select();
-    drawWheel();
-  }
-
-  function handleRouletteResult(option) {
-    if (option.id === 'ai') {
-      setTimeout(() => {
-        showModal(
-          'AI 미션!',
-          '의준이 선준이가 AI를 사용해서 직접 게임을 만들어보세요.',
-          [{ label: '다시 룰렛 돌리기', className: 'secondary-btn', onClick: () => resetRoulette() }]
+      .result strong {
+        display: block;
+        margin-top: 6px;
+        font-size: clamp(22px, 3vw, 32px);
+      }
+      .status {
+        margin-top: 5px;
+        color: #d5e0ff;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        border: 0;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .action {
+        min-width: 145px;
+        border-radius: 18px;
+        padding: 16px 20px;
+        font-size: 18px;
+        font-weight: 900;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+      }
+      .action:active {
+        transform: translateY(2px);
+      }
+      .action[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .spin {
+        background: linear-gradient(#57e4ff, #238dff);
+      }
+      .stop {
+        background: linear-gradient(#ff7c9e, #ff4182);
+      }
+      .choose {
+        background: linear-gradient(#9aadff, #6075ff);
+      }
+      #gameScreen {
+        padding: 0;
+        align-items: stretch;
+        justify-content: stretch;
+        background: radial-gradient(
+          circle at top,
+          #ffeab2,
+          #8fcf78 46%,
+          #316248 100%
         );
-      }, 650);
-      return;
-    }
-    setTimeout(() => launchGame(option.id), 900);
-  }
+      }
+      .gameShell {
+        position: relative;
+        flex: 1;
+        display: block;
+        min-height: 100%;
+        height: 100%;
+      }
+      .topbar {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .back {
+        border-radius: 14px;
+        background: linear-gradient(#91a7ff, #6075ff);
+        padding: 12px 14px;
+        font-weight: 900;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+        pointer-events: auto;
+      }
+      .gameTitle {
+        display: none;
+      }
+      #gameHost {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: radial-gradient(
+          circle at top,
+          #ffeab2,
+          #8fcf78 46%,
+          #316248 100%
+        );
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 20;
+        backdrop-filter: blur(5px);
+      }
+      .modal.show {
+        display: flex;
+      }
+      .modalCard {
+        width: min(90vw, 520px);
+        border-radius: 28px;
+        padding: 26px 22px;
+        background: #f7fbff;
+        color: #23304d;
+        text-align: center;
+        box-shadow: 0 28px 60px rgba(0, 0, 0, 0.35);
+      }
+      .modalCard h2 {
+        margin: 0 0 12px;
+        font-size: clamp(28px, 4vw, 38px);
+      }
+      .modalCard p {
+        white-space: pre-line;
+        font-size: clamp(18px, 2.5vw, 23px);
+        line-height: 1.5;
+      }
+      .modalCard .action {
+        margin-top: 14px;
+        background: linear-gradient(#65d799, #2f9e72);
+      }
+      @media (max-width: 860px) {
+        .screen {
+          padding: 8px;
+        }
+        #rouletteScreen .panel {
+          height: calc(100dvh - 16px);
+          padding: 10px;
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto;
+          gap: 4px;
+        }
+        .wheelWrap {
+          width: min(86vw, calc((100dvh - 250px) * 0.96), 390px);
+        }
+        .info {
+          gap: 8px;
+          align-items: center;
+          text-align: center;
+        }
+        .badge,
+        .desc,
+        .pills {
+          display: none;
+        }
+        .title {
+          font-size: clamp(24px, 7vw, 34px);
+        }
+        .result {
+          padding: 10px 12px;
+          min-height: 66px;
+          width: min(96%, 420px);
+        }
+        .result strong {
+          font-size: clamp(18px, 5.2vw, 24px);
+          margin-top: 2px;
+        }
+        .result small,
+        .status {
+          font-size: 12px;
+        }
+        .controls {
+          width: 100%;
+          justify-content: center;
+          gap: 8px;
+        }
+        .action {
+          min-width: 31%;
+          padding: 13px 8px;
+          border-radius: 15px;
+          font-size: 15px;
+        }
+        .topbar {
+          top: 8px;
+          left: 8px;
+        }
+        .back {
+          padding: 10px 12px;
+          font-size: 14px;
+        }
+        .gameTitle {
+          display: none;
+        }
+      }
+      @media (max-height: 700px) {
+        .wheelWrap {
+          width: min(74vw, calc((100dvh - 220px) * 0.92), 320px);
+        }
+        .title {
+          font-size: 24px;
+        }
+        .result {
+          min-height: 58px;
+        }
+        .action {
+          padding: 10px 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section id="introScreen" class="screen">
+      <div class="introGlow"></div>
+      <img id="introLogo" class="logo" src="logo.png" alt="주니주니 로고" />
+      <div id="introTitle" class="introTitle">주니주니 랜덤 게임</div>
+    </section>
+    <section id="rouletteScreen" class="screen hidden">
+      <div class="panel">
+        <div class="wheelWrap">
+          <div class="pointer"></div>
+          <canvas id="wheel" width="560" height="560"></canvas>
+        </div>
+        <div class="info">
+          <div class="badge">🎲 성경도 배우고 게임도 즐겨요</div>
+          <h1 class="title">주니주니 랜덤 게임</h1>
+          <p class="desc">
+            룰렛을 돌려 게임을 골라보세요. 성경 이야기를 게임 속에서 자연스럽게
+            배울 수 있어요.
+          </p>
+          <div class="pills">
+            <div class="pill">🍔 패스트푸드 알바</div>
+            <div class="pill">🪨 다윗의 용기</div>
+            <div class="pill">🤖 AI 미션</div>
+          </div>
+          <div class="result">
+            <small>선택 결과</small
+            ><strong id="resultText">룰렛을 돌려 게임을 골라보세요!</strong>
+            <div id="status" class="status">
+              돌리기와 멈추기 버튼으로 조작합니다.
+            </div>
+          </div>
+          <div class="controls">
+            <button id="spinBtn" class="action spin">돌리기</button
+            ><button id="stopBtn" class="action stop" disabled>멈추기</button
+            ><button id="selectBtn" class="action choose">직접 선택</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="gameScreen" class="screen hidden">
+      <div class="gameShell">
+        <div class="topbar">
+          <button id="backBtn" class="back">← 룰렛으로 돌아가기</button>
+          <div id="gameTitle" class="gameTitle" aria-hidden="true">게임</div>
+        </div>
+        <div id="gameHost"></div>
+      </div>
+    </section>
+    <div id="modal" class="modal">
+      <div class="modalCard">
+        <h2 id="modalTitle"></h2>
+        <p id="modalText"></p>
+        <button id="modalBtn" class="action">확인</button>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const BUILD_MODE = "external";
+        const GAME_FILES = {
+          fastfood: "fastfood_original.html",
+          david: "david_adventure.html",
+        };
+        const GAME_SOURCES = null;
+        const TAU = Math.PI * 2;
+        const options = [
+          {
+            id: "fastfood",
+            title: "패스트푸드 알바",
+            label: ["패스트푸드", "알바"],
+            colors: ["#ffbf43", "#ff7f43"],
+          },
+          {
+            id: "david",
+            title: "성경 모험: 다윗의 용기",
+            label: ["다윗의", "용기"],
+            colors: ["#7be495", "#2fbf71"],
+          },
+          {
+            id: "ai",
+            title: "AI 미션",
+            label: ["AI로", "직접", "게임 만들기"],
+            colors: ["#ff78c7", "#895bff"],
+          },
+        ];
+        const screens = {
+          intro: document.getElementById("introScreen"),
+          roulette: document.getElementById("rouletteScreen"),
+          game: document.getElementById("gameScreen"),
+        };
+        const introLogo = document.getElementById("introLogo"),
+          introTitle = document.getElementById("introTitle"),
+          wheel = document.getElementById("wheel"),
+          ctx = wheel.getContext("2d"),
+          resultText = document.getElementById("resultText"),
+          status = document.getElementById("status"),
+          spinBtn = document.getElementById("spinBtn"),
+          stopBtn = document.getElementById("stopBtn"),
+          selectBtn = document.getElementById("selectBtn"),
+          gameHost = document.getElementById("gameHost"),
+          gameTitle = document.getElementById("gameTitle"),
+          backBtn = document.getElementById("backBtn"),
+          modal = document.getElementById("modal"),
+          modalTitle = document.getElementById("modalTitle"),
+          modalText = document.getElementById("modalText"),
+          modalBtn = document.getElementById("modalBtn");
+        let currentFrame = null,
+          direct = false;
+        const state = {
+          rot: 0,
+          speed: 0,
+          spinning: false,
+          stopping: false,
+          anim: null,
+          last: 0,
+          result: null,
+          lastTick: 0,
+        };
 
-  function clearGameHost() {
-    if (currentGame && typeof currentGame.destroy === 'function') currentGame.destroy();
-    currentGame = null;
-    gameHost.innerHTML = '';
-    mobileControls.classList.remove('hidden');
-    mobileControls.innerHTML = '<div class="empty-controls">선택된 게임에 맞는 버튼이 여기에 표시됩니다.</div>';
-  }
+        function show(name) {
+          Object.values(screens).forEach((s) => s.classList.add("hidden"));
+          screens[name].classList.remove("hidden");
+        }
 
-  function launchGame(gameId) {
-    clearGameHost();
-    showScreen('game');
-    const option = rouletteOptions.find(v => v.id === gameId);
-    gameTitle.textContent = option ? option.title : '게임';
-
-    const iframePages = {
-      fastfood: FASTFOOD_PAGE,
-      tetris: STAIRS_PAGE,
-      balloon: GALAGA_PAGE
-    };
-
-    if (iframePages[gameId]) {
-      const iframe = document.createElement('iframe');
-      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
-      iframe.setAttribute('allow', 'autoplay');
-      iframe.tabIndex = 0;
-      iframe.style.outline = 'none';
-      if (iframePages[gameId].trim().startsWith('<')) iframe.srcdoc = iframePages[gameId];
-      else iframe.src = iframePages[gameId];
-      const focusIframe = () => {
-        try { iframe.focus(); } catch (e) {}
-        try { iframe.contentWindow && iframe.contentWindow.focus(); } catch (e) {}
-      };
-      iframe.addEventListener('load', () => setTimeout(focusIframe, 90));
-      iframe.addEventListener('pointerdown', focusIframe, { passive: true });
-      gameHost.appendChild(iframe);
-      currentGame = { iframe, destroy() { iframe.remove(); } };
-      mobileControls.classList.add('hidden');
-      setTimeout(focusIframe, 140);
-      return;
-    }
-  }
-
-  backBtn.addEventListener('click', () => {
-    clearGameHost();
-    showScreen('roulette');
-    resetRoulette();
-  });
-
-
-  function focusActiveGameIframe() {
-    const iframe = gameHost.querySelector('iframe');
-    if (!iframe) return;
-    try { iframe.focus(); } catch (e) {}
-    try { iframe.contentWindow && iframe.contentWindow.focus(); } catch (e) {}
-  }
-
-  function forwardGameKeyboard(event) {
-    if (screens.game.classList.contains('hidden')) return;
-    const iframe = gameHost.querySelector('iframe');
-    if (!iframe || document.activeElement === iframe) return;
-    const gameKeys = new Set([
-      'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-      ' ', 'Spacebar', 'Enter', 'Escape',
-      'a', 'A', 'd', 'D', 'w', 'W', 's', 'S', 'x', 'X', 'c', 'C', 'j', 'J', 'k', 'K', 'b', 'B', 'p', 'P', 'Shift'
-    ]);
-    if (!gameKeys.has(event.key) && event.code !== 'Space') return;
-    if (event.code === 'Space' || event.key.startsWith('Arrow')) event.preventDefault();
-    try {
-      const forwarded = new KeyboardEvent(event.type, {
-        key: event.key,
-        code: event.code,
-        location: event.location,
-        ctrlKey: event.ctrlKey,
-        shiftKey: event.shiftKey,
-        altKey: event.altKey,
-        metaKey: event.metaKey,
-        repeat: event.repeat,
-        bubbles: true,
-        cancelable: true
-      });
-      iframe.contentWindow.dispatchEvent(forwarded);
-    } catch (e) {
-      focusActiveGameIframe();
-    }
-  }
-
-  gameHost.addEventListener('pointerdown', focusActiveGameIframe, { passive: true });
-  window.addEventListener('keydown', forwardGameKeyboard);
-  window.addEventListener('keyup', forwardGameKeyboard);
-
-  spinBtn.addEventListener('click', startSpin);
-  stopBtn.addEventListener('click', stopSpin);
-  rerollBtn.addEventListener('click', enableDirectSelect);
-  wheelCanvas.addEventListener('pointerdown', (event) => {
-    if (!wheelState.directSelectMode || wheelState.freeSpin || wheelState.stopping) return;
-    event.preventDefault();
-    const index = getWheelIndexFromPointerEvent(event);
-    if (index == null) {
-      rouletteStatus.textContent = '가운데가 아닌 바깥쪽 게임 칸을 눌러주세요.';
-      ROULETTE_AUDIO.tick();
-      return;
-    }
-    chooseRouletteOption(index, true);
-  });
-  window.addEventListener('pointerdown', trySpeakTitle, { once: true });
-
-  function roundRect(ctx, x, y, w, h, r, fill, stroke) {
-    if (w < 2 * r) r = w / 2;
-    if (h < 2 * r) r = h / 2;
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    if (fill) ctx.fill();
-    if (stroke) ctx.stroke();
-  }
-
-  drawWheel();
-  requestAnimationFrame(wheelLoop);
-  runIntro();
-})();
-</script>
-</body>
+        function intro() {
+          show("intro");
+          requestAnimationFrame(() => {
+            introLogo.classList.add("show");
+            introTitle.classList.add("show");
+          });
+          setTimeout(() => show("roulette"), 2600);
+        }
+        function drawWheel() {
+          const W = wheel.width,
+            H = wheel.height,
+            cx = W / 2,
+            cy = H / 2,
+            r = 238,
+            arc = TAU / options.length;
+          ctx.clearRect(0, 0, W, H);
+          const bg = ctx.createRadialGradient(cx, cy, 30, cx, cy, r + 26);
+          bg.addColorStop(0, "rgba(255,255,255,.22)");
+          bg.addColorStop(1, "rgba(255,255,255,.05)");
+          ctx.fillStyle = bg;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r + 24, 0, TAU);
+          ctx.fill();
+          ctx.save();
+          ctx.translate(cx, cy);
+          for (let i = 0; i < options.length; i++) {
+            const o = options[i],
+              start = state.rot - Math.PI / 2 + i * arc,
+              end = start + arc,
+              g = ctx.createLinearGradient(
+                Math.cos(start) * r,
+                Math.sin(start) * r,
+                Math.cos(end) * r,
+                Math.sin(end) * r,
+              );
+            g.addColorStop(0, o.colors[0]);
+            g.addColorStop(1, o.colors[1]);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, r, start, end);
+            ctx.closePath();
+            ctx.fillStyle = g;
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "rgba(255,255,255,.55)";
+            ctx.stroke();
+            ctx.save();
+            ctx.rotate(start + arc / 2);
+            ctx.fillStyle = "rgba(255,255,255,.18)";
+            roundRect(ctx, 58, -48, 136, 96, 20, true, false);
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#fff";
+            ctx.font = "900 22px Arial";
+            o.label.forEach((line, idx) =>
+              ctx.fillText(line, 126, -21 + idx * 25),
+            );
+            ctx.restore();
+          }
+          if (direct) {
+            ctx.strokeStyle = "rgba(255,255,255,.95)";
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            ctx.arc(0, 0, r + 7, 0, TAU);
+            ctx.stroke();
+          }
+          const cg = ctx.createRadialGradient(0, 0, 8, 0, 0, 78);
+          cg.addColorStop(0, "#fff");
+          cg.addColorStop(1, "#91a8ff");
+          ctx.fillStyle = cg;
+          ctx.beginPath();
+          ctx.arc(0, 0, 82, 0, TAU);
+          ctx.fill();
+          ctx.lineWidth = 8;
+          ctx.strokeStyle = "rgba(255,255,255,.75)";
+          ctx.stroke();
+          ctx.fillStyle = "#304479";
+          ctx.textAlign = "center";
+          ctx.font = "900 20px Arial";
+          ctx.fillText("주니주니", 0, -18);
+          ctx.fillText("랜덤 게임", 0, 14);
+          ctx.restore();
+        }
+        function loop(ts) {
+          const dt = Math.min(0.033, (ts - (state.last || ts)) / 1000);
+          state.last = ts;
+          if (state.spinning) {
+            state.speed += (8.6 - state.speed) * Math.min(1, dt * 5);
+            state.rot += state.speed * dt;
+            const tick = Math.floor(state.rot / (TAU / 16));
+            if (tick !== state.lastTick) {
+              state.lastTick = tick;
+            }
+          } else if (state.stopping && state.anim) {
+            const a = state.anim;
+            a.t += dt;
+            const p = Math.min(1, a.t / a.d),
+              e = 1 - Math.pow(1 - p, 3);
+            state.rot = a.from + (a.to - a.from) * e;
+            if (p >= 1) {
+              state.stopping = false;
+              state.anim = null;
+              state.result = a.index;
+              finish(options[a.index]);
+            }
+          }
+          drawWheel();
+          requestAnimationFrame(loop);
+        }
+        function startSpin() {
+          if (state.spinning || state.stopping) return;
+          direct = false;
+          state.result = null;
+          state.spinning = true;
+          state.speed = Math.max(state.speed, 3);
+          spinBtn.disabled = true;
+          stopBtn.disabled = false;
+          selectBtn.disabled = true;
+          resultText.textContent = "룰렛 회전 중...";
+          status.textContent = "멈추기 버튼으로 결과를 정하세요.";
+        }
+        function stopSpin() {
+          if (!state.spinning) return;
+          state.spinning = false;
+          state.stopping = true;
+          stopBtn.disabled = true;
+          const idx = Math.floor(Math.random() * options.length),
+            arc = TAU / options.length;
+          let target = -(idx + 0.5) * arc;
+          while (target < state.rot + TAU * 4.5) target += TAU;
+          state.anim = {
+            from: state.rot,
+            to: target,
+            d: 2.8,
+            t: 0,
+            index: idx,
+          };
+          status.textContent = "결과 확인 중...";
+        }
+        function finish(o) {
+          spinBtn.disabled = false;
+          selectBtn.disabled = false;
+          resultText.textContent = o.title;
+          status.textContent =
+            o.id === "ai" ? "AI 미션 당첨!" : "게임을 시작합니다.";
+          if (o.id === "ai") {
+            setTimeout(
+              () =>
+                showModal(
+                  "AI 미션",
+                  "의준이 선준이가 AI를 사용해서 직접 게임을 만들어보세요.",
+                ),
+              500,
+            );
+          } else setTimeout(() => launch(o.id), 800);
+        }
+        function enableDirect() {
+          if (state.spinning || state.stopping) return;
+          direct = true;
+          resultText.textContent = "원하는 룰렛 칸을 눌러 직접 선택하세요!";
+          status.textContent = "모바일은 터치, PC는 마우스로 선택합니다.";
+        }
+        function indexFromPointer(e) {
+          const r = wheel.getBoundingClientRect(),
+            x =
+              ((e.clientX - r.left) * wheel.width) / r.width - wheel.width / 2,
+            y =
+              ((e.clientY - r.top) * wheel.height) / r.height -
+              wheel.height / 2,
+            d = Math.sqrt(x * x + y * y);
+          if (d < 95 || d > 255) return null;
+          let ang = Math.atan2(y, x) + Math.PI / 2 - state.rot;
+          ang = ((ang % TAU) + TAU) % TAU;
+          return Math.floor(ang / (TAU / options.length));
+        }
+        wheel.addEventListener("pointerdown", (e) => {
+          if (!direct) return;
+          const idx = indexFromPointer(e);
+          if (idx == null) {
+            status.textContent = "가운데 말고 바깥 게임 칸을 눌러주세요.";
+            return;
+          }
+          direct = false;
+          state.result = idx;
+          finish(options[idx]);
+        });
+        function launch(id) {
+          gameHost.innerHTML = "";
+          const o = options.find((v) => v.id === id);
+          gameTitle.textContent = o.title;
+          show("game");
+          const iframe = document.createElement("iframe");
+          if (BUILD_MODE === "single") {
+            iframe.srcdoc = decodeBase64Utf8(GAME_SOURCES[id]);
+          } else {
+            iframe.src = GAME_FILES[id];
+          }
+          gameHost.appendChild(iframe);
+          currentFrame = iframe;
+          setTimeout(() => iframe.focus(), 300);
+        }
+        function showModal(t, txt) {
+          modalTitle.textContent = t;
+          modalText.textContent = txt;
+          modal.classList.add("show");
+        }
+        modalBtn.onclick = () => {
+          modal.classList.remove("show");
+        };
+        backBtn.onclick = () => {
+          gameHost.innerHTML = "";
+          show("roulette");
+          resetRoulette();
+        };
+        function resetRoulette() {
+          state.spinning = false;
+          state.stopping = false;
+          state.anim = null;
+          state.speed = 0;
+          direct = false;
+          spinBtn.disabled = false;
+          stopBtn.disabled = true;
+          selectBtn.disabled = false;
+          resultText.textContent = "룰렛을 돌려 게임을 골라보세요!";
+          status.textContent = "돌리기와 멈추기 버튼으로 조작합니다.";
+        }
+        function decodeBase64Utf8(b64) {
+          const bin = atob(b64),
+            bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          return new TextDecoder("utf-8").decode(bytes);
+        }
+        function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+          if (w < 2 * r) r = w / 2;
+          if (h < 2 * r) r = h / 2;
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+          if (fill) ctx.fill();
+          if (stroke) ctx.stroke();
+        }
+        spinBtn.onclick = startSpin;
+        stopBtn.onclick = stopSpin;
+        selectBtn.onclick = enableDirect;
+        drawWheel();
+        requestAnimationFrame(loop);
+        intro();
+      })();
+    </script>
+  </body>
 </html>

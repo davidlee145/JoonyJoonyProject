@@ -1,0 +1,1883 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>성경 모험: 다윗의 용기</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: radial-gradient(
+          circle at top,
+          #ffeab2,
+          #8fcf78 46%,
+          #316248 100%
+        );
+        font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        touch-action: none;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      #wrap {
+        width: min(100vw, calc(100dvh * 0.5625));
+        height: min(100dvh, calc(100vw * 1.77777778));
+        display: grid;
+        place-items: center;
+      }
+      canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+        border-radius: 20px;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+        background: #8bd4ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><canvas id="game" width="720" height="1280"></canvas></div>
+    <script>
+      (() => {
+        "use strict";
+        const W = 720,
+          H = 1280,
+          TAU = Math.PI * 2;
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const keys = Object.create(null);
+        let last = 0,
+          cam = 0,
+          pointerDown = false,
+          activePointers = new Map();
+        let audioCtx = null;
+        function audio() {
+          const A = window.AudioContext || window.webkitAudioContext;
+          if (!A) return null;
+          if (!audioCtx) audioCtx = new A();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          return audioCtx;
+        }
+        function tone(
+          freq,
+          dur = 0.08,
+          type = "triangle",
+          vol = 0.04,
+          delay = 0,
+        ) {
+          const ac = audio();
+          if (!ac) return;
+          const o = ac.createOscillator(),
+            g = ac.createGain(),
+            t = ac.currentTime + delay;
+          o.type = type;
+          o.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          o.connect(g).connect(ac.destination);
+          o.start(t);
+          o.stop(t + dur + 0.03);
+        }
+        const SFX = {
+          jump: () => tone(520, 0.08, "sine", 0.04),
+          collect: () => {
+            tone(660, 0.07);
+            tone(880, 0.1, "sine", 0.035, 0.06);
+          },
+          throw: () => tone(380, 0.06, "square", 0.035),
+          hit: () => tone(160, 0.12, "sawtooth", 0.055),
+          win: () => {
+            tone(523, 0.12);
+            tone(659, 0.12, "triangle", 0.05, 0.1);
+            tone(784, 0.18, "triangle", 0.06, 0.2);
+          },
+          hurt: () => tone(110, 0.18, "sawtooth", 0.05),
+          card: () => {
+            tone(740, 0.1);
+            tone(990, 0.15, "sine", 0.04, 0.08);
+          },
+        };
+
+        const scriptureCards = [
+          {
+            short: "시편 23:1",
+            text: "여호와는 나의 목자시니 내게 부족함이 없으리로다",
+          },
+          { short: "삼상 17:45", text: "전쟁은 여호와께 속한 것이라" },
+          {
+            short: "시편 56:3",
+            text: "내가 두려워하는 날에는 내가 주를 의지하리이다",
+          },
+          { short: "여호수아 1:9", text: "강하고 담대하라 두려워하지 말라" },
+        ];
+
+        const BALANCE = {
+          fieldStoneCount: 24,
+          requiredStonesForBoss: 5,
+          bossMinStartStones: 10,
+          bossHp: 3,
+          enemyDrops: { lion: 2, bear: 3 },
+        };
+
+        function dropStones(x, y, count, spread = 34) {
+          for (let i = 0; i < count; i++) {
+            const offset = (i - (count - 1) / 2) * spread;
+            game.items.push({
+              type: "stone",
+              x: clamp(x + offset + rand(-8, 8), 80, game.worldEnd - 80),
+              y: clamp(y + rand(-10, 10), 770, 910),
+              taken: false,
+              bob: rand(0, TAU),
+              dropped: true,
+            });
+          }
+        }
+
+        const game = {
+          mode: "title",
+          stage: "field",
+          time: 0,
+          score: 0,
+          best: 0,
+          worldEnd: 4600,
+          message:
+            "다윗이 되어 양을 지키고 돌 5개를 모아 골리앗에게 나아가세요.",
+          msgTime: 0,
+          player: {
+            x: 120,
+            y: 900,
+            w: 48,
+            h: 82,
+            vx: 0,
+            vy: 0,
+            onGround: false,
+            hearts: 5,
+            inv: 0,
+            stones: 0,
+            faith: 35,
+            throwCool: 0,
+            facing: 1,
+          },
+          sheep: [],
+          enemies: [],
+          items: [],
+          stones: [],
+          projectiles: [],
+          particles: [],
+          boss: null,
+          spears: [],
+          shockwaves: [],
+          clouds: [],
+          birds: [],
+          jumpPad: null,
+          bossWarning: null,
+          koTime: 0,
+          controls: { left: false, right: false, jump: false, throw: false },
+          stepTimer: 0,
+          fieldComplete: false,
+        };
+
+        function resetGame() {
+          Object.assign(game, {
+            mode: "story",
+            stage: "field",
+            time: 0,
+            score: 0,
+            worldEnd: 4600,
+            message: "양을 지키며 시냇가 돌을 모으세요!",
+            msgTime: 4,
+            fieldComplete: false,
+          });
+          game.player = {
+            x: 120,
+            y: 900,
+            w: 48,
+            h: 82,
+            vx: 0,
+            vy: 0,
+            onGround: false,
+            hearts: 5,
+            inv: 0,
+            stones: 0,
+            faith: 35,
+            throwCool: 0,
+            facing: 1,
+          };
+          game.sheep = [];
+          game.enemies = [];
+          game.items = [];
+          game.stones = [];
+          game.projectiles = [];
+          game.particles = [];
+          game.spears = [];
+          game.shockwaves = [];
+          game.boss = null;
+          game.clouds = [];
+          game.birds = [];
+          game.jumpPad = null;
+          game.bossWarning = null;
+          game.koTime = 0;
+          for (let i = 0; i < 7; i++)
+            game.sheep.push({
+              x: 360 + i * 380 + rand(-80, 80),
+              y: 930,
+              panic: 0,
+              dir: Math.random() < 0.5 ? -1 : 1,
+              saved: false,
+            });
+          const stoneStart = 240;
+          const stoneEnd = game.worldEnd - 360;
+          for (let i = 0; i < BALANCE.fieldStoneCount; i++) {
+            const t =
+              BALANCE.fieldStoneCount === 1
+                ? 0
+                : i / (BALANCE.fieldStoneCount - 1);
+            game.items.push({
+              type: "stone",
+              x: stoneStart + (stoneEnd - stoneStart) * t + rand(-42, 42),
+              y: 832 + rand(-46, 16),
+              taken: false,
+              bob: rand(0, TAU),
+            });
+          }
+          for (let i = 0; i < 4; i++)
+            game.items.push({
+              type: "card",
+              card: i % scriptureCards.length,
+              x: 700 + i * 900 + rand(-70, 70),
+              y: 790 + rand(-20, 20),
+              taken: false,
+              bob: rand(0, TAU),
+            });
+          for (let i = 0; i < 6; i++)
+            game.enemies.push(
+              makeEnemy(780 + i * 650 + rand(-80, 80), i % 2 ? "bear" : "lion"),
+            );
+          for (let i = 0; i < 7; i++)
+            game.clouds.push({
+              x: rand(-200, 5200),
+              y: rand(95, 340),
+              s: rand(0.7, 1.55),
+              v: rand(5, 14),
+            });
+          for (let i = 0; i < 8; i++)
+            game.birds.push({
+              x: rand(0, 5000),
+              y: rand(150, 360),
+              s: rand(0.7, 1.1),
+              v: rand(18, 34),
+              flap: rand(0, TAU),
+            });
+          cam = 0;
+          showStory();
+        }
+        function makeEnemy(x, type) {
+          const hp = type === "bear" ? 3 : 2;
+          return {
+            type,
+            x,
+            y: 915,
+            w: type === "bear" ? 82 : 72,
+            h: type === "bear" ? 70 : 62,
+            vx: 0,
+            hp,
+            maxHp: hp,
+            stun: 0,
+            hit: 0,
+            dir: -1,
+            turnLock: rand(0.2, 0.8),
+            anim: rand(0, TAU),
+            alive: true,
+            attack: 0,
+            think: rand(0.1, 0.6),
+          };
+        }
+        function beginBoss() {
+          game.stage = "boss";
+          game.mode = "play";
+          game.message =
+            "점프대를 밟아 높이 튀어 오른 뒤, 골리앗의 얼굴을 향해 물맷돌을 던지세요!";
+          game.msgTime = 4.8;
+          game.player.x = 128;
+          game.player.y = 900;
+          game.player.vx = 0;
+          game.player.vy = 0;
+          game.player.stones = Math.max(
+            game.player.stones,
+            BALANCE.bossMinStartStones,
+          );
+          cam = 0;
+          game.enemies = [];
+          game.items = [];
+          game.projectiles = [];
+          game.spears = [];
+          game.shockwaves = [];
+          game.particles = [];
+          game.bossWarning = null;
+          game.koTime = 0;
+          game.jumpPad = {
+            x: 286,
+            y: 980,
+            w: 142,
+            h: 24,
+            power: 965,
+            cool: 0,
+            flash: 0,
+          };
+          game.bossStoneTimer = 0;
+          game.boss = {
+            x: 596,
+            y: 825,
+            w: 112,
+            h: 228,
+            hp: BALANCE.bossHp,
+            maxHp: BALANCE.bossHp,
+            phase: 0,
+            step: 0,
+            stun: 0,
+            hit: 0,
+            faceHit: 0,
+            vx: -72,
+            dir: -1,
+            moveMin: 505,
+            moveMax: 642,
+            attackCooldown: 1.25,
+            action: "patrol",
+            actionTimer: 0,
+            shieldFlash: 0,
+            koFall: 0,
+          };
+        }
+        function showStory() {
+          game.mode = "story";
+          game.storyIndex = 0;
+        }
+        const storyPages = [
+          "소년 다윗은 들판에서 양을 돌보았어요.\n작은 일에도 충성하며 하나님을 의지했죠.",
+          "사자와 곰이 나타나도 다윗은 두려워하지 않았어요.\n믿음과 용기로 양을 지켜주세요!",
+          "골리앗과 싸우기 전, 시냇가에서 돌 5개를 모으세요.\n말씀 카드는 믿음 게이지를 채워줍니다.",
+        ];
+
+        function groundYAt(x) {
+          return 965 + Math.sin(x / 240) * 10 + Math.sin(x / 91) * 5;
+        }
+        function rects(a, b) {
+          return (
+            a.x < b.x + b.w &&
+            a.x + a.w > b.x &&
+            a.y < b.y + b.h &&
+            a.y + a.h > b.y
+          );
+        }
+        function stoneHitsBossFace(stone, boss) {
+          const dx = stone.x - boss.x,
+            dy = stone.y - (boss.y - 178);
+          return (dx * dx) / (30 * 30) + (dy * dy) / (36 * 36) <= 1;
+        }
+        function stoneHitsBossBody(stone, boss) {
+          return (
+            stone.x > boss.x - 60 &&
+            stone.x < boss.x + 60 &&
+            stone.y > boss.y - 155 &&
+            stone.y < boss.y + 34
+          );
+        }
+        function addParticle(x, y, color, n = 10) {
+          for (let i = 0; i < n; i++) {
+            const a = rand(0, TAU),
+              s = rand(50, 180);
+            game.particles.push({
+              x,
+              y,
+              vx: Math.cos(a) * s,
+              vy: Math.sin(a) * s,
+              life: rand(0.35, 0.85),
+              max: 1,
+              color,
+              r: rand(2, 6),
+            });
+          }
+        }
+        function hurtPlayer(dmg = 1) {
+          const p = game.player;
+          if (p.inv > 0) return;
+          p.hearts -= dmg;
+          p.inv = 1.4;
+          SFX.hurt();
+          addParticle(p.x, p.y - 35, "#ff5a6f", 18);
+          if (p.hearts <= 0) {
+            game.mode = "gameover";
+            game.message =
+              "다시 도전해보세요. 하나님이 함께하시는 용기를 기억해요!";
+          }
+        }
+        function showMsg(m, t = 2.4) {
+          game.message = m;
+          game.msgTime = t;
+        }
+
+        function update(dt) {
+          game.time += dt;
+          if (game.mode === "bossko") {
+            game.koTime = Math.max(0, game.koTime - dt);
+            if (game.boss) {
+              game.boss.koFall = clamp((2.2 - game.koTime) / 2.2, 0, 1);
+              game.boss.faceHit = Math.max(0, game.boss.faceHit - dt);
+              game.boss.step += dt * 7;
+            }
+            updateParticles(dt);
+            for (const b of game.projectiles) {
+              b.x += b.vx * dt;
+              b.y += b.vy * dt;
+              b.vy += (b.gravity ?? 520) * dt;
+              b.life -= dt;
+            }
+            game.projectiles = game.projectiles.filter(
+              (b) => b.life > 0 && b.y < 1100,
+            );
+            game.msgTime = Math.max(0, game.msgTime - dt);
+            if (game.koTime <= 0) {
+              game.mode = "win";
+              game.score += 2000;
+            }
+            return;
+          }
+          if (game.mode !== "play") {
+            updateParticles(dt);
+            return;
+          }
+          const p = game.player;
+          p.inv = Math.max(0, p.inv - dt);
+          p.throwCool = Math.max(0, p.throwCool - dt);
+          p.faith = clamp(p.faith + dt * 1.2, 0, 100);
+          const left = game.controls.left || keys.ArrowLeft || keys.KeyA;
+          const right = game.controls.right || keys.ArrowRight || keys.KeyD;
+          let ax = 0;
+          if (left) ax -= 1;
+          if (right) ax += 1;
+          p.vx += ax * 1300 * dt;
+          p.vx *= Math.pow(0.08, dt);
+          p.vx = clamp(p.vx, -310, 310);
+          if (ax !== 0) p.facing = ax;
+          if (
+            (game.controls.jump || keys.ArrowUp || keys.Space || keys.KeyW) &&
+            p.onGround
+          ) {
+            p.vy = -560;
+            p.onGround = false;
+            SFX.jump();
+          }
+          if (
+            (game.controls.throw || keys.KeyZ || keys.Enter || keys.KeyJ) &&
+            p.throwCool <= 0
+          )
+            throwStone();
+          p.vy += 1500 * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          const gy = game.stage === "field" ? groundYAt(p.x) - p.h : 980 - p.h;
+          if (p.y > gy) {
+            p.y = gy;
+            p.vy = 0;
+            p.onGround = true;
+          } else p.onGround = false;
+          if (game.stage === "field") p.x = clamp(p.x, 40, game.worldEnd + 240);
+          else p.x = clamp(p.x, 55, 430);
+          cam =
+            game.stage === "field"
+              ? clamp(p.x - 250, 0, game.worldEnd - 620)
+              : 0;
+          updateProjectiles(dt);
+          updateParticles(dt);
+          updateFieldOrBoss(dt);
+          game.msgTime = Math.max(0, game.msgTime - dt);
+        }
+        function throwStone() {
+          const p = game.player;
+          if (p.stones <= 0) {
+            showMsg("돌이 없어요! 시냇가 돌을 더 모아보세요.", 1.4);
+            return;
+          }
+          let sx = p.x + p.facing * 34,
+            sy = p.y + 24,
+            vx = p.facing * 620,
+            vy = -150,
+            gravity = 520,
+            life = 1.8,
+            faceShot = false,
+            r = 8;
+          if (game.stage === "boss" && game.boss) {
+            const boss = game.boss;
+            const airborne = !p.onGround || p.y < 850;
+            p.facing = boss.x > p.x ? 1 : -1;
+            sx = p.x + p.facing * 34;
+            if (airborne) {
+              const tx = boss.x,
+                ty = boss.y - 178;
+              const dx = tx - sx,
+                dy = ty - sy;
+              const t = clamp(Math.abs(dx) / 630, 0.42, 0.86);
+              gravity = 360;
+              vx = dx / t;
+              vy = (dy - 0.5 * gravity * t * t) / t;
+              life = 1.35;
+              faceShot = true;
+              r = 9;
+              showMsg("공중 조준! 골리앗의 얼굴을 노립니다!", 0.85);
+            } else {
+              showMsg(
+                "점프대를 밟고 공중에서 던지면 얼굴을 정확히 노릴 수 있어요!",
+                0.95,
+              );
+            }
+          }
+          p.stones--;
+          p.throwCool = faceShot ? 0.48 : 0.38;
+          SFX.throw();
+          game.projectiles.push({
+            x: sx,
+            y: sy,
+            vx,
+            vy,
+            gravity,
+            life,
+            r,
+            kind: "stone",
+            faceShot,
+          });
+        }
+        function updateProjectiles(dt) {
+          for (const b of game.projectiles) {
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.vy += (b.gravity ?? 520) * dt;
+            b.life -= dt;
+          }
+          game.projectiles = game.projectiles.filter(
+            (b) => b.life > 0 && b.y < 1100,
+          );
+          if (game.stage === "field") {
+            for (const b of game.projectiles) {
+              for (const e of game.enemies) {
+                if (!e.alive) continue;
+                if (
+                  Math.abs(b.x - e.x) < e.w * 0.7 &&
+                  Math.abs(b.y - (e.y - 25)) < e.h * 0.7
+                ) {
+                  b.life = 0;
+                  e.hp--;
+                  e.stun = 0.7;
+                  e.hit = 0.16;
+                  SFX.hit();
+                  addParticle(b.x, b.y, "#ffe07a", 16);
+                  if (e.hp <= 0) {
+                    e.alive = false;
+                    game.score += 180;
+                    showMsg(
+                      e.type === "lion"
+                        ? "사자를 물리쳤어요!"
+                        : "곰을 물리쳤어요!",
+                      1.5,
+                    );
+                  }
+                }
+              }
+            }
+          } else if (game.boss) {
+            const boss = game.boss;
+            for (const b of game.projectiles) {
+              if (b.life <= 0) continue;
+              if (stoneHitsBossFace(b, boss)) {
+                b.life = 0;
+                boss.hit = 0.55;
+                boss.faceHit = 1;
+                boss.stun = 1.2;
+                boss.koFall = 0;
+                game.score += 2800;
+                game.player.faith = 100;
+                addParticle(b.x, b.y, "#fff1a8", 42);
+                addParticle(b.x, b.y, "#7af6ff", 26);
+                addParticle(boss.x, boss.y - 178, "#ffffff", 30);
+                SFX.hit();
+                SFX.win();
+                game.mode = "bossko";
+                game.koTime = 2.2;
+                showMsg("얼굴 명중! 골리앗이 쓰러집니다!", 2.1);
+                continue;
+              }
+              if (stoneHitsBossBody(b, boss)) {
+                b.life = 0;
+                boss.hp = Math.max(0, boss.hp - 1);
+                boss.hit = 0.22;
+                boss.stun = 0.34;
+                boss.vx *= -0.8;
+                boss.shieldFlash = 0.28;
+                game.score += 120;
+                game.player.faith = clamp(game.player.faith + 4, 0, 100);
+                addParticle(b.x, b.y, "#d5dde9", 20);
+                addParticle(b.x, b.y, "#fff1a8", 8);
+                tone(120, 0.09, "square", 0.04);
+                showMsg(
+                  "갑옷에 막혔어요. 점프대로 올라가 얼굴을 노리세요!",
+                  1.25,
+                );
+              }
+            }
+          }
+        }
+        function updateFieldOrBoss(dt) {
+          if (game.stage === "field") updateField(dt);
+          else updateBoss(dt);
+        }
+        function updateField(dt) {
+          const p = game.player;
+          for (const c of game.clouds) {
+            c.x += c.v * dt;
+            if (c.x - cam > 900) c.x = cam - 260;
+          }
+          for (const b of game.birds) {
+            b.x += b.v * dt;
+            b.flap += dt * 7;
+            if (b.x - cam > 820) b.x = cam - 200;
+          }
+          for (const item of game.items) {
+            if (item.taken) continue;
+            item.bob += dt * 3.5;
+            const r = { x: item.x - 28, y: item.y - 28, w: 56, h: 56 };
+            const pr = { x: p.x - p.w / 2, y: p.y, w: p.w, h: p.h };
+            if (rects(pr, r)) {
+              item.taken = true;
+              if (item.type === "stone") {
+                p.stones++;
+                game.score += 50;
+                SFX.collect();
+                showMsg(`돌을 주웠어요! (${p.stones}/5)`, 1.2);
+                addParticle(item.x, item.y, "#d8c286", 10);
+              } else {
+                const card = scriptureCards[item.card];
+                p.faith = clamp(p.faith + 35, 0, 100);
+                game.score += 160;
+                SFX.card();
+                showMsg(`${card.short}\n${card.text}`, 4);
+                addParticle(item.x, item.y, "#75e4ff", 22);
+              }
+            }
+          }
+          for (const s of game.sheep) {
+            s.panic = Math.max(0, s.panic - dt);
+            s.x += s.dir * (s.panic ? 65 : 18) * dt;
+            if (Math.random() < dt * 0.18) s.dir *= -1;
+            if (s.x < 120) s.dir = 1;
+            if (s.x > game.worldEnd - 140) s.dir = -1;
+            const nearest = game.enemies.find(
+              (e) => e.alive && Math.abs(e.x - s.x) < 150,
+            );
+            if (nearest) {
+              s.panic = 0.9;
+              s.dir = nearest.x < s.x ? 1 : -1;
+            }
+          }
+          for (const e of game.enemies) {
+            if (!e.alive) continue;
+            e.hit = Math.max(0, e.hit - dt);
+            e.stun = Math.max(0, e.stun - dt);
+            e.attack = Math.max(0, e.attack - dt);
+            e.turnLock = Math.max(0, e.turnLock - dt);
+            e.anim += dt * (e.type === "bear" ? 5.4 : 7.2);
+            if (e.stun <= 0) {
+              let target = p.x;
+              const sheep = game.sheep.find(
+                (s) => Math.abs(s.x - e.x) < 340 && Math.abs(s.x - p.x) > 70,
+              );
+              if (sheep && Math.abs(sheep.x - e.x) + 60 < Math.abs(p.x - e.x))
+                target = sheep.x;
+              const dx = target - e.x;
+              if (Math.abs(dx) > 34 && e.turnLock <= 0) {
+                const desired = dx < 0 ? -1 : 1;
+                if (desired !== e.dir) {
+                  e.dir = desired;
+                  e.turnLock = 0.34;
+                }
+              }
+              let separation = 0;
+              for (const other of game.enemies) {
+                if (other === e || !other.alive) continue;
+                const d = e.x - other.x,
+                  min = (e.w + other.w) * 0.52;
+                if (Math.abs(d) < min) {
+                  separation += (d >= 0 ? 1 : -1) * (min - Math.abs(d)) * 4.2;
+                }
+              }
+              const base = e.type === "bear" ? 82 : 112;
+              e.vx = e.dir * base + separation;
+              e.x += e.vx * dt;
+              e.x = clamp(e.x, 90, game.worldEnd - 90);
+            }
+            const er = { x: e.x - e.w / 2, y: e.y - e.h, w: e.w, h: e.h };
+            const pr = { x: p.x - p.w / 2, y: p.y, w: p.w, h: p.h };
+            if (rects(er, pr) && e.attack <= 0) {
+              e.attack = 0.95;
+              hurtPlayer(1);
+              p.vx += (p.x < e.x ? -1 : 1) * 330;
+              p.vy = Math.min(p.vy, -170);
+              addParticle(p.x, p.y + 22, "#ffcc70", 12);
+            }
+          }
+          if (
+            p.x > game.worldEnd - 240 &&
+            p.stones >= BALANCE.requiredStonesForBoss
+          ) {
+            beginBoss();
+            return;
+          }
+          if (
+            p.x > game.worldEnd - 240 &&
+            p.stones < BALANCE.requiredStonesForBoss
+          ) {
+            showMsg(
+              `골리앗에게 가려면 돌 ${BALANCE.requiredStonesForBoss}개가 필요해요. 현재 ${p.stones}개`,
+              2,
+            );
+          }
+        }
+        function updateBoss(dt) {
+          const p = game.player,
+            boss = game.boss;
+          if (!boss) return;
+          const pad = game.jumpPad;
+          boss.hit = Math.max(0, boss.hit - dt);
+          boss.stun = Math.max(0, boss.stun - dt);
+          boss.faceHit = Math.max(0, boss.faceHit - dt);
+          boss.shieldFlash = Math.max(0, boss.shieldFlash - dt);
+          boss.step += dt * 6;
+          boss.dir = p.x < boss.x ? -1 : 1;
+
+          if (boss.stun <= 0 && !game.bossWarning) {
+            const pressure = p.x > 330 ? -24 : 0;
+            boss.x += (boss.vx + pressure) * dt;
+            if (boss.x < boss.moveMin) {
+              boss.x = boss.moveMin;
+              boss.vx = Math.abs(boss.vx);
+            }
+            if (boss.x > boss.moveMax) {
+              boss.x = boss.moveMax;
+              boss.vx = -Math.abs(boss.vx);
+            }
+          }
+
+          boss.attackCooldown -= dt;
+          if (!game.bossWarning && boss.attackCooldown <= 0) {
+            const close = Math.abs(p.x - boss.x) < 170 && p.onGround;
+            if (close || Math.random() < 0.38) {
+              game.bossWarning = {
+                type: "stomp",
+                t: 0.62,
+                max: 0.62,
+                x: boss.x - 58,
+                y: 976,
+              };
+              boss.action = "stomp";
+              boss.actionTimer = 0.62;
+              boss.attackCooldown = 2.35;
+              tone(96, 0.12, "sawtooth", 0.032);
+            } else {
+              game.bossWarning = {
+                type: "spear",
+                t: 0.72,
+                max: 0.72,
+                fromX: boss.x - 58,
+                fromY: boss.y - 128,
+                targetX: p.x,
+                targetY: p.y + 26,
+              };
+              boss.action = "aim";
+              boss.actionTimer = 0.72;
+              boss.attackCooldown = 1.85;
+              tone(220, 0.06, "square", 0.024);
+            }
+          }
+
+          if (game.bossWarning) {
+            const w = game.bossWarning;
+            w.t -= dt;
+            boss.actionTimer = Math.max(0, w.t);
+            if (w.type === "spear") {
+              w.targetX += (p.x - w.targetX) * dt * 1.6;
+              w.targetY += (p.y + 26 - w.targetY) * dt * 1.2;
+            }
+            if (w.t <= 0) {
+              if (w.type === "spear") {
+                const sx = boss.x - 50,
+                  sy = boss.y - 128;
+                const dx = w.targetX - sx,
+                  dy = w.targetY - sy;
+                const t = clamp(Math.abs(dx) / 440, 0.55, 1.05);
+                game.spears.push({
+                  x: sx,
+                  y: sy,
+                  vx: dx / t,
+                  vy: (dy - 0.5 * 260 * t * t) / t,
+                  r: 12,
+                  life: 3,
+                });
+                tone(190, 0.08, "square", 0.04);
+              } else {
+                game.shockwaves.push({
+                  x: boss.x - 64,
+                  y: 976,
+                  vx: -270,
+                  r: 28,
+                  life: 1.15,
+                  hit: false,
+                });
+                game.shockwaves.push({
+                  x: boss.x - 36,
+                  y: 976,
+                  vx: -185,
+                  r: 24,
+                  life: 1.05,
+                  hit: false,
+                });
+                addParticle(boss.x - 55, 965, "#c8914b", 24);
+                tone(80, 0.16, "sawtooth", 0.05);
+              }
+              game.bossWarning = null;
+              boss.action = "patrol";
+            }
+          }
+
+          for (const s of game.spears) {
+            s.x += s.vx * dt;
+            s.y += s.vy * dt;
+            s.vy += 260 * dt;
+            s.life -= dt;
+            const pr = { x: p.x - p.w / 2, y: p.y, w: p.w, h: p.h };
+            if (
+              s.life > 0 &&
+              rects(pr, { x: s.x - 38, y: s.y - 8, w: 76, h: 16 })
+            ) {
+              s.life = 0;
+              hurtPlayer(1);
+              addParticle(s.x, s.y, "#c9ad74", 10);
+            }
+          }
+          game.spears = game.spears.filter(
+            (s) => s.life > 0 && s.x > -120 && s.y < 1150,
+          );
+
+          for (const sw of game.shockwaves) {
+            sw.x += sw.vx * dt;
+            sw.life -= dt;
+            sw.r += 18 * dt;
+            if (
+              !sw.hit &&
+              Math.abs(p.x - sw.x) < sw.r + 20 &&
+              p.y + p.h > sw.y - 34
+            ) {
+              sw.hit = true;
+              hurtPlayer(1);
+              p.vx -= 260;
+              p.vy = -260;
+              addParticle(p.x, p.y + p.h, "#d9a767", 14);
+            }
+          }
+          game.shockwaves = game.shockwaves.filter(
+            (sw) => sw.life > 0 && sw.x > -80,
+          );
+
+          if (pad) {
+            pad.flash = Math.max(0, pad.flash - dt);
+            pad.cool = Math.max(0, pad.cool - dt);
+            const feet = p.y + p.h;
+            const overlap =
+              p.x + p.w / 2 > pad.x - pad.w / 2 &&
+              p.x - p.w / 2 < pad.x + pad.w / 2;
+            if (
+              overlap &&
+              feet >= pad.y - 8 &&
+              feet <= pad.y + 22 &&
+              p.vy >= -140 &&
+              pad.cool <= 0
+            ) {
+              p.y = pad.y - p.h;
+              p.vy = -pad.power;
+              p.onGround = false;
+              pad.cool = 0.34;
+              pad.flash = 0.34;
+              SFX.jump();
+              tone(860, 0.06, "square", 0.028);
+              addParticle(p.x, p.y + p.h, "#8df1ff", 22);
+              showMsg(
+                "점프대 발사! 공중에서 던지면 얼굴을 자동 조준합니다!",
+                1.05,
+              );
+            }
+          }
+          game.bossStoneTimer = Math.max(0, (game.bossStoneTimer || 0) - dt);
+          const activeBossDrops = game.items.filter(
+            (i) => !i.taken && i.bossDrop,
+          ).length;
+          if (p.stones < 3 && activeBossDrops < 3 && game.bossStoneTimer <= 0) {
+            game.bossStoneTimer = 0.75;
+            game.items.push({
+              type: "stone",
+              x: rand(80, 365),
+              y: 900,
+              taken: false,
+              bob: rand(0, TAU),
+              bossDrop: true,
+            });
+          }
+          for (const item of game.items) {
+            if (item.taken) continue;
+            item.bob += dt * 4;
+            const pr = { x: p.x - p.w / 2, y: p.y, w: p.w, h: p.h };
+            if (rects(pr, { x: item.x - 28, y: item.y - 28, w: 56, h: 56 })) {
+              item.taken = true;
+              p.stones++;
+              SFX.collect();
+            }
+          }
+          game.items = game.items.filter(
+            (i) => !i.taken && (!i.bossDrop || i.x < 500),
+          );
+        }
+        function updateParticles(dt) {
+          for (const p of game.particles) {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vy += 280 * dt;
+            p.life -= dt;
+          }
+          game.particles = game.particles.filter((p) => p.life > 0);
+        }
+
+        function draw() {
+          drawBackground();
+          if (game.mode === "title") drawTitle();
+          else if (game.mode === "story") drawStory();
+          else {
+            drawWorld();
+            drawHUD();
+            if (game.mode === "gameover") drawEnd(false);
+            if (game.mode === "win") drawEnd(true);
+          }
+          drawControls();
+        }
+        function drawBackground() {
+          const g = ctx.createLinearGradient(0, 0, 0, H);
+          g.addColorStop(0, "#82d9ff");
+          g.addColorStop(0.46, "#d2f4a2");
+          g.addColorStop(1, "#5d9a56");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = "rgba(255,255,255,.22)";
+          ctx.beginPath();
+          ctx.arc(570, 150, 70, 0, TAU);
+          ctx.fill();
+        }
+        function drawWorld() {
+          if (game.stage === "field") drawField();
+          else drawBossArena();
+          for (const item of game.items) if (!item.taken) drawItem(item);
+          for (const s of game.sheep) drawSheep(s.x - cam, s.y, s.panic);
+          for (const e of game.enemies)
+            if (e.alive)
+              drawEnemy(
+                e.x - cam,
+                e.y,
+                e.type,
+                e.dir,
+                e.hit,
+                e.hp,
+                e.maxHp,
+                e.anim,
+              );
+          for (const b of game.projectiles) {
+            if (b.faceShot) drawPrayerStone(b.x - cam, b.y, b.r);
+            else drawStone(b.x - cam, b.y, b.r);
+          }
+          for (const sp of game.spears) drawSpear(sp.x, sp.y);
+          if (game.boss) drawGoliath(game.boss);
+          drawDavid(game.player.x - cam, game.player.y, game.player);
+          drawParticles();
+          if (game.msgTime > 0) drawMessage(game.message);
+        }
+        function drawField() {
+          for (const c of game.clouds) drawCloud(c.x - cam, c.y, c.s);
+          for (const b of game.birds) drawBird(b.x - cam, b.y, b.s, b.flap);
+          ctx.fillStyle = "#699b4f";
+          ctx.beginPath();
+          ctx.moveTo(0, H);
+          for (let x = 0; x <= W; x += 20) {
+            const wx = x + cam,
+              gy = groundYAt(wx);
+            ctx.lineTo(x, gy);
+          }
+          ctx.lineTo(W, H);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(45,88,38,.32)";
+          for (let x = -60 - (cam % 120); x < W + 120; x += 120) {
+            ctx.fillRect(x, 990 + Math.sin((x + cam) / 100) * 8, 82, 12);
+          }
+          ctx.fillStyle = "#3f7544";
+          for (let x = -120 - (cam % 280); x < W + 220; x += 280)
+            drawTree(x, groundYAt(x + cam) + 5, 1 + ((x + cam) % 3) * 0.05);
+          const progress = clamp(game.player.x / game.worldEnd, 0, 1);
+          ctx.fillStyle = "rgba(255,255,255,.8)";
+          roundRect(ctx, 70, 103, 580, 26, 13, true, false);
+          ctx.fillStyle = "#43b36d";
+          roundRect(ctx, 72, 105, 576 * progress, 22, 11, true, false);
+          ctx.fillStyle = "#31486d";
+          ctx.font = "900 15px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText(
+            `돌 ${BALANCE.requiredStonesForBoss}개 이상 모아 골리앗에게 가는 길`,
+            360,
+            122,
+          );
+        }
+        function drawBossArena() {
+          ctx.fillStyle = "rgba(255,205,110,.36)";
+          ctx.fillRect(0, 0, W, H);
+          drawCloud(90, 160, 1.2);
+          drawCloud(520, 220, 1.1);
+          ctx.fillStyle = "#d7b36a";
+          ctx.beginPath();
+          ctx.moveTo(0, H);
+          ctx.lineTo(0, 980);
+          ctx.quadraticCurveTo(360, 930, 720, 980);
+          ctx.lineTo(W, H);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(138,98,50,.22)";
+          for (let x = 0; x < W; x += 54) {
+            ctx.fillRect(
+              x,
+              982 + Math.sin((x + game.time * 30) / 90) * 6,
+              32,
+              7,
+            );
+          }
+          ctx.fillStyle = "#7b5a35";
+          ctx.fillRect(0, 990, W, 18);
+          ctx.fillStyle = "#553d29";
+          ctx.font = "900 26px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("엘라 골짜기", 360, 80);
+          drawBossWarning();
+          drawShockwaves();
+          if (game.jumpPad) drawJumpPad(game.jumpPad);
+          if (game.boss) {
+            const pct = game.boss.hp / game.boss.maxHp;
+            ctx.fillStyle = "rgba(0,0,0,.22)";
+            roundRect(ctx, 74, 108, 420, 34, 17, true, false);
+            ctx.fillStyle = "#6a7b91";
+            roundRect(ctx, 79, 113, 410 * pct, 24, 12, true, false);
+            ctx.fillStyle = "#fff";
+            ctx.font = "900 17px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText("골리앗 갑옷", 92, 132);
+            const pulse = Math.sin(game.time * 8) * 0.5 + 0.5;
+            ctx.fillStyle = `rgba(255,255,255,${0.86 + pulse * 0.12})`;
+            roundRect(ctx, 512, 104, 132, 42, 18, true, false);
+            ctx.fillStyle = "#a2272a";
+            ctx.textAlign = "center";
+            ctx.font = "900 18px Arial";
+            ctx.fillText("약점: 얼굴 KO", 578, 131);
+            ctx.fillStyle = "rgba(255,255,255,.9)";
+            ctx.font = "800 18px Arial";
+            ctx.fillText(
+              "경고 표시를 보고 피한 뒤, 점프대로 얼굴을 노리세요!",
+              360,
+              170,
+            );
+          }
+        }
+        function drawHUD() {
+          ctx.fillStyle = "rgba(70,43,22,.88)";
+          roundRect(ctx, 18, 18, 684, 72, 22, true, false);
+          ctx.textAlign = "left";
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 28px Arial";
+          ctx.fillText(
+            game.stage === "field" ? "성경 모험: 다윗의 용기" : "골리앗 보스전",
+            38,
+            50,
+          );
+          ctx.font = "800 20px Arial";
+          ctx.fillStyle = "#ffe791";
+          ctx.fillText(`점수 ${game.score}`, 38, 76);
+          for (let i = 0; i < 5; i++) {
+            ctx.fillStyle =
+              i < game.player.hearts ? "#ff5d72" : "rgba(255,255,255,.25)";
+            heart(392 + i * 34, 48, 13);
+          }
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 22px Arial";
+          ctx.fillText(`🪨 ${game.player.stones}`, 566, 51);
+          ctx.fillText(`믿음`, 566, 76);
+          ctx.fillStyle = "rgba(255,255,255,.3)";
+          roundRect(ctx, 620, 60, 62, 12, 6, true, false);
+          ctx.fillStyle = "#7af6ff";
+          roundRect(
+            ctx,
+            620,
+            60,
+            62 * (game.player.faith / 100),
+            12,
+            6,
+            true,
+            false,
+          );
+        }
+        function drawTitle() {
+          ctx.fillStyle = "rgba(18,38,28,.52)";
+          ctx.fillRect(0, 0, W, H);
+          drawCloud(100, 190, 1.5);
+          drawCloud(530, 290, 1.2);
+          drawDavid(360, 760, { facing: 1, inv: 0 });
+          drawSheep(190, 930, 0);
+          drawEnemy(560, 920, "lion", -1, 0);
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 54px Arial";
+          ctx.fillText("성경 모험", 360, 240);
+          ctx.font = "900 46px Arial";
+          ctx.fillStyle = "#ffe28a";
+          ctx.fillText("다윗의 용기", 360, 300);
+          ctx.fillStyle = "rgba(255,255,255,.92)";
+          roundRect(ctx, 70, 360, 580, 210, 28, true, false);
+          ctx.fillStyle = "#35533a";
+          ctx.font = "800 27px Arial";
+          ctx.fillText("양을 지키고 돌을 모아", 360, 425);
+          ctx.fillText("골리앗에게 믿음으로 맞서세요!", 360, 465);
+          ctx.font = "700 21px Arial";
+          ctx.fillText("모바일: 아래 버튼 / PC: 방향키, 스페이스, Z", 360, 525);
+          ctx.fillStyle = "#2f9c63";
+          roundRect(ctx, 170, 650, 380, 92, 28, true, false);
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 36px Arial";
+          ctx.fillText("시작하기", 360, 708);
+        }
+        function drawStory() {
+          drawField();
+          drawDavid(210, 850, game.player);
+          drawSheep(430, 940, 0);
+          ctx.fillStyle = "rgba(0,0,0,.45)";
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = "rgba(255,255,255,.96)";
+          roundRect(ctx, 62, 280, 596, 470, 34, true, false);
+          ctx.fillStyle = "#2e4534";
+          ctx.textAlign = "center";
+          ctx.font = "900 34px Arial";
+          ctx.fillText("다윗 이야기", 360, 345);
+          ctx.font = "700 25px Arial";
+          wrap(storyPages[game.storyIndex], 360, 420, 500, 36, "#3d5940");
+          ctx.fillStyle = "#2f9c63";
+          roundRect(ctx, 190, 650, 340, 78, 24, true, false);
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 29px Arial";
+          ctx.fillText(
+            game.storyIndex < storyPages.length - 1 ? "다음" : "모험 시작",
+            360,
+            700,
+          );
+        }
+        function drawEnd(win) {
+          ctx.fillStyle = "rgba(0,0,0,.55)";
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = "#fffdf2";
+          roundRect(ctx, 70, 315, 580, 460, 34, true, false);
+          ctx.textAlign = "center";
+          ctx.fillStyle = win ? "#168b55" : "#bf3340";
+          ctx.font = "900 46px Arial";
+          ctx.fillText(win ? "승리!" : "다시 도전!", 360, 390);
+          ctx.fillStyle = "#3d4c35";
+          ctx.font = "800 25px Arial";
+          wrap(
+            win
+              ? "작은 다윗은 큰 골리앗보다 하나님을 더 크게 보았어요. 우리도 하나님을 의지하면 용기를 낼 수 있어요."
+              : game.message,
+            360,
+            455,
+            500,
+            36,
+            "#3d4c35",
+          );
+          ctx.fillStyle = "#f2a533";
+          roundRect(ctx, 190, 655, 340, 82, 24, true, false);
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 30px Arial";
+          ctx.fillText("다시 시작", 360, 707);
+        }
+        function drawControls() {
+          if (
+            game.mode === "title" ||
+            game.mode === "story" ||
+            game.mode === "win" ||
+            game.mode === "gameover"
+          )
+            return;
+          const buttons = [
+            ["left", "◀", 45, 1110, 105, 105],
+            ["right", "▶", 170, 1110, 105, 105],
+            ["jump", "점프", 452, 1110, 105, 105],
+            ["throw", "던지기", 575, 1110, 118, 105],
+          ];
+          for (const [id, label, x, y, w, h] of buttons) {
+            const on = game.controls[id];
+            ctx.fillStyle = on ? "rgba(255,225,120,.9)" : "rgba(37,54,80,.74)";
+            roundRect(ctx, x, y, w, h, 24, true, false);
+            ctx.strokeStyle = "rgba(255,255,255,.55)";
+            ctx.lineWidth = 3;
+            roundRect(ctx, x, y, w, h, 24, false, true);
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "center";
+            ctx.font = id === "throw" ? "900 24px Arial" : "900 30px Arial";
+            ctx.fillText(label, x + w / 2, y + 63);
+          }
+        }
+        function drawItem(item) {
+          const x = item.x - cam,
+            y = item.y + Math.sin(item.bob) * 8;
+          if (item.type === "stone") {
+            drawStone(x, y, 14);
+            ctx.fillStyle = "rgba(255,255,255,.55)";
+            ctx.beginPath();
+            ctx.arc(x - 5, y - 6, 5, 0, TAU);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = "#fff3b0";
+            roundRect(ctx, x - 38, y - 44, 76, 88, 14, true, false);
+            ctx.strokeStyle = "#a27b22";
+            ctx.lineWidth = 3;
+            roundRect(ctx, x - 38, y - 44, 76, 88, 14, false, true);
+            ctx.fillStyle = "#2f694b";
+            ctx.textAlign = "center";
+            ctx.font = "900 18px Arial";
+            ctx.fillText("말씀", x, y - 11);
+            ctx.font = "900 20px Arial";
+            ctx.fillText("카드", x, y + 18);
+          }
+        }
+        function drawDavid(x, y, p) {
+          const inv = p.inv > 0 && Math.floor(game.time * 12) % 2 === 0;
+          if (inv) return;
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(p.facing || 1, 1);
+          ctx.fillStyle = "rgba(0,0,0,.2)";
+          ctx.beginPath();
+          ctx.ellipse(0, 82, 34, 10, 0, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#8e5a2e";
+          roundRect(ctx, -16, 28, 32, 58, 14, true, false);
+          ctx.fillStyle = "#f3c792";
+          ctx.beginPath();
+          ctx.arc(0, 10, 20, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#5d3920";
+          ctx.beginPath();
+          ctx.arc(-4, 2, 22, Math.PI, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#24344b";
+          ctx.fillRect(8, 9, 4, 4);
+          ctx.strokeStyle = "#f3c792";
+          ctx.lineWidth = 9;
+          ctx.beginPath();
+          ctx.moveTo(-12, 40);
+          ctx.lineTo(-38, 64);
+          ctx.moveTo(14, 40);
+          ctx.lineTo(36, 24);
+          ctx.stroke();
+          ctx.strokeStyle = "#5b3e2b";
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.moveTo(33, 23);
+          ctx.lineTo(54, 14);
+          ctx.stroke();
+          ctx.strokeStyle = "#6f472a";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(-9, 82);
+          ctx.lineTo(-20, 110);
+          ctx.moveTo(9, 82);
+          ctx.lineTo(22, 110);
+          ctx.stroke();
+          ctx.restore();
+        }
+        function drawSheep(x, y, panic) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.fillStyle = "rgba(0,0,0,.16)";
+          ctx.beginPath();
+          ctx.ellipse(0, 26, 42, 10, 0, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = panic ? "#fff7d5" : "#fff";
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(-24 + i * 13, 0 + Math.sin(i) * 4, 19, 0, TAU);
+            ctx.fill();
+          }
+          ctx.fillStyle = "#ffe1c6";
+          ctx.beginPath();
+          ctx.arc(32, -3, 15, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#222";
+          ctx.fillRect(36, -6, 3, 3);
+          ctx.strokeStyle = "#5c4a40";
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(-18, 16);
+          ctx.lineTo(-20, 35);
+          ctx.moveTo(15, 16);
+          ctx.lineTo(16, 35);
+          ctx.stroke();
+          if (panic) {
+            ctx.fillStyle = "#ff5d72";
+            ctx.font = "900 22px Arial";
+            ctx.fillText("!", -5, -35);
+          }
+          ctx.restore();
+        }
+        function drawEnemy(x, y, type, dir, hit, hp, maxHp, anim = 0) {
+          ctx.save();
+          const bob = Math.sin(anim) * 2.4,
+            leg = Math.sin(anim) * 7;
+          ctx.translate(x, y + bob);
+          ctx.scale(dir, 1);
+          ctx.fillStyle = "rgba(0,0,0,.2)";
+          ctx.beginPath();
+          ctx.ellipse(0, 12, type === "bear" ? 54 : 47, 13, 0, 0, TAU);
+          ctx.fill();
+          if (hp < maxHp) {
+            ctx.save();
+            ctx.scale(dir, 1);
+            ctx.fillStyle = "rgba(0,0,0,.35)";
+            roundRect(ctx, -42, -108, 84, 10, 5, true, false);
+            ctx.fillStyle = type === "bear" ? "#ff9b54" : "#ffd34f";
+            roundRect(ctx, -42, -108, 84 * (hp / maxHp), 10, 5, true, false);
+            ctx.restore();
+          }
+          ctx.globalAlpha = hit ? 0.58 : 1;
+          ctx.fillStyle = type === "bear" ? "#8b5b3b" : "#d08b38";
+          roundRect(
+            ctx,
+            -40,
+            -60,
+            type === "bear" ? 82 : 74,
+            type === "bear" ? 58 : 50,
+            23,
+            true,
+            false,
+          );
+          ctx.fillStyle = "rgba(255,255,255,.14)";
+          roundRect(
+            ctx,
+            -28,
+            -54,
+            type === "bear" ? 42 : 38,
+            15,
+            8,
+            true,
+            false,
+          );
+          ctx.beginPath();
+          ctx.arc(38, -63, 24, 0, TAU);
+          ctx.fillStyle = type === "bear" ? "#8b5b3b" : "#d08b38";
+          ctx.fill();
+          ctx.fillStyle = type === "bear" ? "#5e3a27" : "#b56b25";
+          ctx.beginPath();
+          ctx.arc(27, -82, 10, 0, TAU);
+          ctx.arc(49, -83, 10, 0, TAU);
+          ctx.fill();
+          if (type === "lion") {
+            ctx.fillStyle = "#9b5c21";
+            ctx.beginPath();
+            ctx.arc(38, -64, 34, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = "#d08b38";
+            ctx.beginPath();
+            ctx.arc(38, -64, 22, 0, TAU);
+            ctx.fill();
+          }
+          ctx.fillStyle = "#1f1b18";
+          ctx.fillRect(45, -67, 4, 4);
+          ctx.fillRect(57, -59, 12, 4);
+          ctx.strokeStyle = type === "bear" ? "#6b442b" : "#a36226";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(-24, -9);
+          ctx.lineTo(-30 + leg * 0.25, 16);
+          ctx.moveTo(22, -9);
+          ctx.lineTo(30 - leg * 0.25, 16);
+          ctx.stroke();
+          ctx.restore();
+        }
+        function drawBossWarning() {
+          const w = game.bossWarning;
+          if (!w) return;
+          const pct = clamp(w.t / w.max, 0, 1),
+            alpha = 0.25 + 0.45 * (1 - pct);
+          ctx.save();
+          if (w.type === "spear") {
+            ctx.strokeStyle = `rgba(255,60,60,${alpha})`;
+            ctx.lineWidth = 8;
+            ctx.setLineDash([18, 12]);
+            ctx.beginPath();
+            ctx.moveTo(w.fromX, w.fromY);
+            ctx.lineTo(w.targetX, w.targetY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = `rgba(255,60,60,${0.18 + 0.28 * (1 - pct)})`;
+            ctx.beginPath();
+            ctx.arc(w.targetX, w.targetY, 34 + 16 * (1 - pct), 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "900 18px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("창 공격!", w.targetX, Math.max(210, w.targetY - 42));
+          } else {
+            ctx.fillStyle = `rgba(255,72,48,${0.16 + 0.22 * (1 - pct)})`;
+            roundRect(ctx, w.x - 98, w.y - 36, 196, 44, 20, true, false);
+            ctx.strokeStyle = `rgba(255,72,48,${alpha})`;
+            ctx.lineWidth = 5;
+            roundRect(ctx, w.x - 98, w.y - 36, 196, 44, 20, false, true);
+            ctx.fillStyle = "#fff";
+            ctx.font = "900 20px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("발 구르기!", w.x, w.y - 48);
+          }
+          ctx.restore();
+        }
+        function drawShockwaves() {
+          for (const sw of game.shockwaves) {
+            const a = clamp(sw.life / 1.15, 0, 1);
+            ctx.save();
+            ctx.globalAlpha = a;
+            ctx.strokeStyle = "#b5793c";
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(sw.x, sw.y, sw.r, Math.PI * 0.96, Math.PI * 1.99);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(120,80,38,.22)";
+            ctx.beginPath();
+            ctx.ellipse(sw.x, sw.y + 8, sw.r * 0.9, 9, 0, 0, TAU);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+        function drawPrayerStone(x, y, r) {
+          ctx.save();
+          ctx.fillStyle = "rgba(255,237,118,.22)";
+          ctx.beginPath();
+          ctx.arc(x, y, r * 3.1, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,.75)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, y, r * 2.1, 0, TAU);
+          ctx.stroke();
+          drawStone(x, y, r);
+          ctx.restore();
+        }
+        function drawGoliath(b) {
+          ctx.save();
+          const walk = Math.sin(b.step) * 9,
+            bob = Math.sin(b.step * 0.5) * 4;
+          ctx.translate(b.x, b.y + bob);
+          ctx.scale(b.dir || -1, 1);
+          if (b.koFall) {
+            ctx.rotate(-1.18 * b.koFall);
+            ctx.translate(-18 * b.koFall, 48 * b.koFall);
+          }
+          if (b.hit) ctx.globalAlpha = 0.66;
+          const aiming = game.bossWarning && game.bossWarning.type === "spear";
+          const stomping =
+            game.bossWarning && game.bossWarning.type === "stomp";
+          ctx.fillStyle = "rgba(0,0,0,.22)";
+          ctx.beginPath();
+          ctx.ellipse(0, 34, 64, 16, 0, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = "#465564";
+          ctx.lineWidth = 13;
+          ctx.beginPath();
+          ctx.moveTo(-26, -10);
+          ctx.lineTo(-34, 42 + walk * 0.25);
+          ctx.moveTo(26, -10);
+          ctx.lineTo(36, 42 - walk * 0.25);
+          ctx.stroke();
+          ctx.fillStyle = b.shieldFlash > 0 ? "#90a2ba" : "#5f748c";
+          roundRect(ctx, -46, -154, 92, 146, 22, true, false);
+          ctx.fillStyle = "rgba(255,255,255,.12)";
+          roundRect(ctx, -28, -138, 56, 30, 12, true, false);
+          ctx.fillStyle = "#7e8fa5";
+          ctx.beginPath();
+          ctx.arc(-56, -116, 20, 0, TAU);
+          ctx.arc(56, -116, 20, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = "#d6b084";
+          ctx.lineWidth = 14;
+          ctx.beginPath();
+          if (aiming) {
+            ctx.moveTo(-44, -116);
+            ctx.lineTo(-92, -116);
+            ctx.moveTo(44, -116);
+            ctx.lineTo(82, -146);
+          } else if (stomping) {
+            ctx.moveTo(-44, -116);
+            ctx.lineTo(-72, -72);
+            ctx.moveTo(44, -116);
+            ctx.lineTo(68, -62);
+          } else {
+            ctx.moveTo(-44, -116);
+            ctx.lineTo(-86, -72 + walk * 0.15);
+            ctx.moveTo(44, -116);
+            ctx.lineTo(82, -90 - walk * 0.15);
+          }
+          ctx.stroke();
+          ctx.strokeStyle = "#6d4b2b";
+          ctx.lineWidth = 9;
+          ctx.beginPath();
+          ctx.moveTo(81, -150);
+          ctx.lineTo(81, 25);
+          ctx.stroke();
+          ctx.fillStyle = "#d6b084";
+          ctx.beginPath();
+          ctx.arc(0, -182, 33, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#6a4a30";
+          ctx.beginPath();
+          ctx.arc(0, -192, 38, Math.PI, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#98a6bb";
+          ctx.beginPath();
+          ctx.moveTo(-36, -184);
+          ctx.lineTo(-16, -214);
+          ctx.lineTo(16, -214);
+          ctx.lineTo(36, -184);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#24303a";
+          ctx.fillRect(10, -184, 6, 6);
+          ctx.fillRect(-16, -184, 6, 6);
+          ctx.strokeStyle = "#895639";
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(-9, -162);
+          ctx.lineTo(5, -156);
+          ctx.stroke();
+          const targetOpen =
+            game.player.y < 870 || b.faceHit > 0 || game.mode === "bossko";
+          ctx.strokeStyle = targetOpen
+            ? "rgba(255,245,120,.95)"
+            : "rgba(255,255,255,.55)";
+          ctx.lineWidth = targetOpen ? 5 : 3;
+          ctx.beginPath();
+          ctx.arc(0, -178, 36 + Math.sin(performance.now() / 120) * 2, 0, TAU);
+          ctx.stroke();
+          if (targetOpen) {
+            ctx.fillStyle = "rgba(255,60,60,.2)";
+            ctx.beginPath();
+            ctx.arc(0, -178, 24, 0, TAU);
+            ctx.fill();
+          }
+          if (b.faceHit > 0) {
+            ctx.globalAlpha = Math.max(0.25, b.faceHit);
+            ctx.fillStyle = "#fff5aa";
+            ctx.beginPath();
+            ctx.arc(0, -178, 54, 0, TAU);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        function drawJumpPad(pad) {
+          const pulse = Math.sin(performance.now() / 120) * 4;
+          ctx.save();
+          ctx.translate(pad.x, pad.y);
+          ctx.fillStyle = "rgba(0,0,0,.18)";
+          ctx.beginPath();
+          ctx.ellipse(0, 14, pad.w * 0.52, 10, 0, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = pad.flash > 0 ? "#8af5ff" : "#4cd7ff";
+          roundRect(ctx, -pad.w / 2, -16, pad.w, 26, 12, true, false);
+          ctx.strokeStyle = "rgba(255,255,255,.78)";
+          ctx.lineWidth = 4;
+          roundRect(ctx, -pad.w / 2, -16, pad.w, 26, 12, false, true);
+          ctx.fillStyle = "#173955";
+          ctx.beginPath();
+          ctx.moveTo(-24, -4);
+          ctx.lineTo(0, -26 - pulse);
+          ctx.lineTo(24, -4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = "900 18px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("점프대", 0, 38);
+          ctx.restore();
+        }
+        function drawStone(x, y, r) {
+          ctx.fillStyle = "#8a8173";
+          ctx.beginPath();
+          ctx.ellipse(x, y, r * 1.15, r * 0.86, 0.25, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,.25)";
+          ctx.beginPath();
+          ctx.arc(x - r * 0.3, y - r * 0.25, r * 0.25, 0, TAU);
+          ctx.fill();
+        }
+        function drawSpear(x, y) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(-0.08);
+          ctx.strokeStyle = "#795637";
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(-38, 0);
+          ctx.lineTo(38, 0);
+          ctx.stroke();
+          ctx.fillStyle = "#bfc7d5";
+          ctx.beginPath();
+          ctx.moveTo(-52, 0);
+          ctx.lineTo(-35, -11);
+          ctx.lineTo(-35, 11);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        function drawParticles() {
+          for (const p of game.particles) {
+            ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x - cam, p.y, p.r, 0, TAU);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+        function drawCloud(x, y, s) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(s, s);
+          ctx.fillStyle = "rgba(255,255,255,.82)";
+          ctx.beginPath();
+          ctx.arc(-32, 8, 28, 0, TAU);
+          ctx.arc(0, -5, 38, 0, TAU);
+          ctx.arc(38, 8, 30, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
+        function drawBird(x, y, s, f) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(s, s);
+          ctx.strokeStyle = "rgba(55,75,90,.65)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-12, 0);
+          ctx.quadraticCurveTo(0, Math.sin(f) * 12, 12, 0);
+          ctx.stroke();
+          ctx.restore();
+        }
+        function drawTree(x, y, s) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(s, s);
+          ctx.fillStyle = "#7b4f2b";
+          roundRect(ctx, -11, -88, 22, 90, 8, true, false);
+          ctx.fillStyle = "#2f8f48";
+          ctx.beginPath();
+          ctx.arc(0, -105, 44, 0, TAU);
+          ctx.arc(-30, -78, 34, 0, TAU);
+          ctx.arc(30, -78, 36, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
+        function drawMessage(text) {
+          ctx.fillStyle = "rgba(255,255,255,.94)";
+          roundRect(ctx, 48, 145, 624, 120, 24, true, false);
+          ctx.fillStyle = "#31486d";
+          ctx.textAlign = "center";
+          ctx.font = "800 25px Arial";
+          wrap(text, 360, 188, 560, 32, "#31486d");
+        }
+        function heart(x, y, r) {
+          ctx.beginPath();
+          ctx.moveTo(x, y + r);
+          ctx.bezierCurveTo(
+            x - r * 2,
+            y - r * 0.2,
+            x - r,
+            y - r * 1.6,
+            x,
+            y - r * 0.7,
+          );
+          ctx.bezierCurveTo(
+            x + r,
+            y - r * 1.6,
+            x + r * 2,
+            y - r * 0.2,
+            x,
+            y + r,
+          );
+          ctx.fill();
+        }
+        function wrap(text, x, y, max, lineH, color) {
+          ctx.fillStyle = color;
+          const paragraphs = String(text).split("\n");
+          let yy = y;
+          for (const para of paragraphs) {
+            const words = para.split(" ");
+            let line = "";
+            for (const w of words) {
+              const test = line ? line + " " + w : w;
+              if (ctx.measureText(test).width > max && line) {
+                ctx.fillText(line, x, yy);
+                yy += lineH;
+                line = w;
+              } else line = test;
+            }
+            ctx.fillText(line, x, yy);
+            yy += lineH;
+          }
+        }
+        function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+          if (w < 2 * r) r = w / 2;
+          if (h < 2 * r) r = h / 2;
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+          if (fill) ctx.fill();
+          if (stroke) ctx.stroke();
+        }
+
+        const controlRects = {
+          left: [45, 1110, 105, 105],
+          right: [170, 1110, 105, 105],
+          jump: [452, 1110, 105, 105],
+          throw: [575, 1110, 118, 105],
+        };
+        function canvasPos(e) {
+          const r = canvas.getBoundingClientRect();
+          return {
+            x: ((e.clientX - r.left) * W) / r.width,
+            y: ((e.clientY - r.top) * H) / r.height,
+          };
+        }
+        function hitButton(p) {
+          for (const [k, r] of Object.entries(controlRects)) {
+            if (
+              p.x >= r[0] &&
+              p.x <= r[0] + r[2] &&
+              p.y >= r[1] &&
+              p.y <= r[1] + r[3]
+            )
+              return k;
+          }
+          return null;
+        }
+        function primaryAction(p) {
+          if (game.mode === "title") {
+            if (p.x > 150 && p.x < 570 && p.y > 620 && p.y < 760) resetGame();
+            return;
+          }
+          if (game.mode === "story") {
+            if (p.x > 165 && p.x < 555 && p.y > 620 && p.y < 745) {
+              if (game.storyIndex < storyPages.length - 1) game.storyIndex++;
+              else game.mode = "play";
+            }
+            return;
+          }
+          if (game.mode === "win" || game.mode === "gameover") {
+            if (p.x > 175 && p.x < 560 && p.y > 630 && p.y < 760) resetGame();
+          }
+        }
+        canvas.addEventListener("pointerdown", (e) => {
+          audio();
+          canvas.setPointerCapture(e.pointerId);
+          const p = canvasPos(e);
+          primaryAction(p);
+          const b = hitButton(p);
+          if (b) {
+            game.controls[b] = true;
+            activePointers.set(e.pointerId, b);
+          }
+        });
+        canvas.addEventListener("pointerup", (e) => {
+          const b = activePointers.get(e.pointerId);
+          if (b) game.controls[b] = false;
+          activePointers.delete(e.pointerId);
+        });
+        canvas.addEventListener("pointercancel", (e) => {
+          const b = activePointers.get(e.pointerId);
+          if (b) game.controls[b] = false;
+          activePointers.delete(e.pointerId);
+        });
+        window.addEventListener("keydown", (e) => {
+          keys[e.code] = true;
+          if (
+            [
+              "Space",
+              "ArrowUp",
+              "ArrowDown",
+              "ArrowLeft",
+              "ArrowRight",
+            ].includes(e.code)
+          )
+            e.preventDefault();
+          if (
+            game.mode === "title" &&
+            (e.code === "Enter" || e.code === "Space")
+          )
+            resetGame();
+          if (
+            game.mode === "story" &&
+            (e.code === "Enter" || e.code === "Space")
+          ) {
+            if (game.storyIndex < storyPages.length - 1) game.storyIndex++;
+            else game.mode = "play";
+          }
+          if (
+            (game.mode === "win" || game.mode === "gameover") &&
+            (e.code === "Enter" || e.code === "Space")
+          )
+            resetGame();
+        });
+        window.addEventListener("keyup", (e) => {
+          keys[e.code] = false;
+        });
+        function frame(ts) {
+          const dt = Math.min(0.033, (ts - (last || ts)) / 1000);
+          last = ts;
+          update(dt);
+          draw();
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
