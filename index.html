@@ -289,7 +289,7 @@
       }
       .back {
         border-radius: 14px;
-        background: linear-gradient(#91a7ff, #6075ff);
+        background: transparent;
         padding: 12px 14px;
         font-weight: 900;
         box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
@@ -358,22 +358,22 @@
         .screen {
           padding: 8px;
         }
-        #rouletteScreen .panel {
-          height: calc(100dvh - 16px);
-          padding: 14px 12px;
-          grid-template-columns: 1fr;
-          grid-template-rows: auto auto;
-          gap: 12px;
-        }
-        .wheelWrap {
-          width: min(82vw, calc((100dvh - 285px) * 0.94), 370px);
-          margin-bottom: 4px;
-        }
-        .info {
-          gap: 11px;
-          align-items: center;
-          text-align: center;
-        }
+       #rouletteScreen .panel {
+  height: calc(100dvh - 16px);
+  padding: 14px 12px;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  gap: 12px;
+}
+      .wheelWrap {
+  width: min(82vw, calc((100dvh - 285px) * 0.94), 370px);
+  margin-bottom: 4px;
+}
+       .info {
+  gap: 11px;
+  align-items: center;
+  text-align: center;
+}
         .badge,
         .desc,
         .pills {
@@ -382,12 +382,12 @@
         .title {
           font-size: clamp(24px, 7vw, 34px);
         }
-        .result {
-          padding: 11px 12px;
-          min-height: 72px;
-          width: min(96%, 420px);
-          margin-top: 2px;
-        }
+       .result {
+  padding: 11px 12px;
+  min-height: 72px;
+  width: min(96%, 420px);
+  margin-top: 2px;
+}
         .result strong {
           font-size: clamp(18px, 5.2vw, 24px);
           margin-top: 2px;
@@ -396,12 +396,12 @@
         .status {
           font-size: 12px;
         }
-        .controls {
-          width: 100%;
-          justify-content: center;
-          gap: 10px;
-          margin-top: 2px;
-        }
+      .controls {
+  width: 100%;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 2px;
+}
         .action {
           min-width: 31%;
           padding: 13px 8px;
@@ -421,9 +421,9 @@
         }
       }
       @media (max-height: 700px) {
-        .wheelWrap {
-          width: min(72vw, calc((100dvh - 235px) * 0.9), 310px);
-        }
+       .wheelWrap {
+  width: min(72vw, calc((100dvh - 235px) * 0.9), 310px);
+}
         .title {
           font-size: 24px;
         }
@@ -478,7 +478,7 @@
     <section id="gameScreen" class="screen hidden">
       <div class="gameShell">
         <div class="topbar">
-          <button id="backBtn" class="back">← 룰렛으로 돌아가기</button>
+          <button id="backBtn" class="back">←</button>
           <div id="gameTitle" class="gameTitle" aria-hidden="true">게임</div>
         </div>
         <div id="gameHost"></div>

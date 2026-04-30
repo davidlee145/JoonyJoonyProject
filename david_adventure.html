@@ -12,6 +12,9 @@
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
         user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        -webkit-touch-callout: none;
       }
       html,
       body {
@@ -27,6 +30,8 @@
         );
         font-family: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
         touch-action: none;
+        -webkit-touch-callout: none;
+        overscroll-behavior: none;
       }
       body {
         display: grid;
@@ -45,6 +50,9 @@
         border-radius: 20px;
         box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
         background: #8bd4ff;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
       }
     </style>
   </head>
@@ -57,6 +65,13 @@
           H = 1280,
           TAU = Math.PI * 2;
         const canvas = document.getElementById("game");
+        document.addEventListener("contextmenu", (e) => e.preventDefault());
+        document.addEventListener("selectstart", (e) => e.preventDefault());
+        document.addEventListener("dragstart", (e) => e.preventDefault());
+
+        canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+        canvas.addEventListener("selectstart", (e) => e.preventDefault());
+        canvas.addEventListener("dragstart", (e) => e.preventDefault());
         const ctx = canvas.getContext("2d");
         const rand = (a, b) => a + Math.random() * (b - a);
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
