@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ko">
+  <!-- MAIN_INDEX_VERSION: 2026-04-30-compact-game-header-gradient-v1 -->
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -7,8 +8,8 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>주니주니 랜덤 게임</title>
+    <!-- MAIN_EXTERNAL_VERSION: 2026-04-30-roulette-3slots-no-noah-v1 -->
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Jua&display=swap");
       * {
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
@@ -359,16 +360,17 @@
         }
         #rouletteScreen .panel {
           height: calc(100dvh - 16px);
-          padding: 10px;
+          padding: 14px 12px;
           grid-template-columns: 1fr;
           grid-template-rows: auto auto;
-          gap: 4px;
+          gap: 12px;
         }
         .wheelWrap {
-          width: min(86vw, calc((100dvh - 250px) * 0.96), 390px);
+          width: min(82vw, calc((100dvh - 285px) * 0.94), 370px);
+          margin-bottom: 4px;
         }
         .info {
-          gap: 8px;
+          gap: 11px;
           align-items: center;
           text-align: center;
         }
@@ -381,9 +383,10 @@
           font-size: clamp(24px, 7vw, 34px);
         }
         .result {
-          padding: 10px 12px;
-          min-height: 66px;
+          padding: 11px 12px;
+          min-height: 72px;
           width: min(96%, 420px);
+          margin-top: 2px;
         }
         .result strong {
           font-size: clamp(18px, 5.2vw, 24px);
@@ -396,7 +399,8 @@
         .controls {
           width: 100%;
           justify-content: center;
-          gap: 8px;
+          gap: 10px;
+          margin-top: 2px;
         }
         .action {
           min-width: 31%;
@@ -418,7 +422,7 @@
       }
       @media (max-height: 700px) {
         .wheelWrap {
-          width: min(74vw, calc((100dvh - 220px) * 0.92), 320px);
+          width: min(72vw, calc((100dvh - 235px) * 0.9), 310px);
         }
         .title {
           font-size: 24px;
@@ -549,12 +553,49 @@
           result: null,
           lastTick: 0,
         };
-
+        const audio = (() => {
+          let ac = null;
+          function C() {
+            const A = window.AudioContext || window.webkitAudioContext;
+            if (!A) return null;
+            if (!ac) ac = new A();
+            if (ac.state === "suspended") ac.resume();
+            return ac;
+          }
+          function tone(f, d = 0.07, type = "triangle", v = 0.045, delay = 0) {
+            const a = C();
+            if (!a) return;
+            const o = a.createOscillator(),
+              g = a.createGain(),
+              t = a.currentTime + delay;
+            o.type = type;
+            o.frequency.setValueAtTime(f, t);
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(v, t + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+            o.connect(g).connect(a.destination);
+            o.start(t);
+            o.stop(t + d + 0.03);
+          }
+          return {
+            unlock: C,
+            start: () => {
+              tone(360);
+              tone(620, 0.1, "triangle", 0.05, 0.05);
+            },
+            tick: () => tone(920, 0.032, "square", 0.02),
+            stop: () => tone(280, 0.12, "sawtooth", 0.04),
+            win: () => {
+              tone(523, 0.1);
+              tone(659, 0.1, "triangle", 0.05, 0.08);
+              tone(784, 0.16, "triangle", 0.06, 0.16);
+            },
+          };
+        })();
         function show(name) {
           Object.values(screens).forEach((s) => s.classList.add("hidden"));
           screens[name].classList.remove("hidden");
         }
-
         function intro() {
           show("intro");
           requestAnimationFrame(() => {
@@ -646,6 +687,7 @@
             const tick = Math.floor(state.rot / (TAU / 16));
             if (tick !== state.lastTick) {
               state.lastTick = tick;
+              audio.tick();
             }
           } else if (state.stopping && state.anim) {
             const a = state.anim;
@@ -665,6 +707,8 @@
         }
         function startSpin() {
           if (state.spinning || state.stopping) return;
+          audio.unlock();
+          audio.start();
           direct = false;
           state.result = null;
           state.spinning = true;
@@ -677,6 +721,7 @@
         }
         function stopSpin() {
           if (!state.spinning) return;
+          audio.stop();
           state.spinning = false;
           state.stopping = true;
           stopBtn.disabled = true;
@@ -694,6 +739,7 @@
           status.textContent = "결과 확인 중...";
         }
         function finish(o) {
+          audio.win();
           spinBtn.disabled = false;
           selectBtn.disabled = false;
           resultText.textContent = o.title;
@@ -715,6 +761,8 @@
           direct = true;
           resultText.textContent = "원하는 룰렛 칸을 눌러 직접 선택하세요!";
           status.textContent = "모바일은 터치, PC는 마우스로 선택합니다.";
+          audio.unlock();
+          audio.tick();
         }
         function indexFromPointer(e) {
           const r = wheel.getBoundingClientRect(),
@@ -746,6 +794,7 @@
           gameTitle.textContent = o.title;
           show("game");
           const iframe = document.createElement("iframe");
+          iframe.allow = "autoplay";
           if (BUILD_MODE === "single") {
             iframe.srcdoc = decodeBase64Utf8(GAME_SOURCES[id]);
           } else {
